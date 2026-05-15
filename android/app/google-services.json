@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "420544796421",
+    "project_id": "test-491ff",
+    "storage_bucket": "test-491ff.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:420544796421:android:5e9e71a05ce1af13a0c96c",
+        "android_client_info": {
+          "package_name": "com.exel.exel_ott"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBCfi62fvg_hcg4xTqejLP3KO1Phb4OVF0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
