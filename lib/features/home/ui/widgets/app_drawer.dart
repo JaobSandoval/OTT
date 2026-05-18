@@ -25,14 +25,15 @@ class AppDrawer extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 22,
-                  backgroundColor: Colors.white,
-                  child: Text(
-                    'X',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black,
+                  backgroundColor: Colors.black,
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/x.png',
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ),

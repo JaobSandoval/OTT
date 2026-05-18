@@ -1,18 +1,17 @@
 class AppConfig {
-  static const String appName = 'Exel OTT';
+  static const String appName = 'AppXLStore';
 
-  /// Sin backend: `true`. Con backend local/LAN/prod:
-  /// `flutter run --dart-define=USE_MOCK_API=false --dart-define=API_BASE_URL=http://192.168.1.10:8000`
+  /// Solo desarrollo local: `flutter run --dart-define=USE_MOCK_API=true`
   static const bool useMockApi = bool.fromEnvironment(
     'USE_MOCK_API',
-    defaultValue: true,
+    defaultValue: false,
   );
 
-  /// Auth real: `LoginRegistrarToken` (usuario + contraseña + dispositivo + FCM).
-  /// `flutter run --dart-define=USE_MOCK_API=false --dart-define=USE_EXEL_AUTH=true --dart-define=EXEL_ID_APLICACION=...`
+  /// Auth Exel vía `LoginRegistrarToken` (usuario + contraseña + dispositivo + FCM).
+  /// Desactivar solo para probar el backend prototipo: `--dart-define=USE_EXEL_AUTH=false`
   static const bool useExelAuth = bool.fromEnvironment(
     'USE_EXEL_AUTH',
-    defaultValue: false,
+    defaultValue: true,
   );
 
   /// ASMX base para login SOAP `LoginRegistrarToken` (fijo, no viene del JSON remoto).
@@ -32,10 +31,10 @@ class AppConfig {
     defaultValue: 'https://xls.exel.mx:6983/AI/AI.asmx/InfoUsuario',
   );
 
-  /// URL base del API (sin barra final).
+  /// URL base del API (sin barra final). Se completa con el JSON remoto en runtime.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://example.com',
+    defaultValue: '',
   );
 
   /// JSON remoto (se carga al iniciar la app; el asset local solo rellena claves faltantes).

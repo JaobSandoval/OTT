@@ -65,6 +65,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Image.asset(
+                      'assets/x.png',
+                      height: 88,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      AppConfig.appName,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
                     Text(
                       'Iniciar sesión',
                       style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),

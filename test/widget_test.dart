@@ -14,7 +14,7 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const ExelOttApp());
 
-    // App starts on login (mock) by default.
+    // App starts on login (Exel auth por defecto).
     expect(find.text('Iniciar sesión'), findsOneWidget);
 
     // Verify login button exists.

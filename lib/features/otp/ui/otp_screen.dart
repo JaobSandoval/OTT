@@ -1,3 +1,4 @@
+import 'package:exel_ott/core/config/app_config.dart';
 import 'package:exel_ott/core/notifications/local_notifications_service.dart';
 import 'package:exel_ott/features/otp/domain/otp_code.dart';
 import 'package:exel_ott/features/otp/domain/otp_repository.dart';
@@ -108,12 +109,14 @@ class _OtpScreenState extends State<OtpScreen> {
                             : const Icon(Icons.refresh),
                         label: const Text('Actualizar'),
                       ),
-                      const SizedBox(height: 10),
-                      OutlinedButton.icon(
-                        onPressed: _simulateIncoming,
-                        icon: const Icon(Icons.notifications_active),
-                        label: const Text('Simular notificación (mock)'),
-                      ),
+                      if (AppConfig.useMockApi) ...[
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: _simulateIncoming,
+                          icon: const Icon(Icons.notifications_active),
+                          label: const Text('Simular notificación (mock)'),
+                        ),
+                      ],
                     ],
                   ),
                 ),

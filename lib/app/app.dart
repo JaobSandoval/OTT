@@ -9,6 +9,7 @@ import 'package:exel_ott/features/auth/data/auth_exel_repository.dart';
 import 'package:exel_ott/features/auth/data/auth_mock_repository.dart';
 import 'package:exel_ott/features/auth/domain/auth_repository.dart';
 import 'package:exel_ott/features/otp/data/otp_api_repository.dart';
+import 'package:exel_ott/features/otp/data/otp_exel_repository.dart';
 import 'package:exel_ott/features/otp/data/otp_mock_repository.dart';
 import 'package:exel_ott/features/otp/domain/otp_repository.dart';
 import 'package:flutter/material.dart';
@@ -42,9 +43,11 @@ class _ExelOttAppState extends State<ExelOttApp> {
             ? AuthExelRepository(sessionStore: _sessionStore)
             : AuthApiRepository(sessionStore: _sessionStore);
 
-    _otpRepository = AppConfig.useMockApi || AppConfig.useExelAuth
+    _otpRepository = AppConfig.useMockApi
         ? OtpMockRepository()
-        : OtpApiRepository(sessionStore: _sessionStore);
+        : AppConfig.useExelAuth
+            ? OtpExelRepository()
+            : OtpApiRepository(sessionStore: _sessionStore);
 
     _authController = AuthController(
       sessionStore: _sessionStore,

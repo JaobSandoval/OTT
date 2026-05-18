@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "420544796421",
-    "project_id": "test-491ff",
-    "storage_bucket": "test-491ff.firebasestorage.app"
+    "project_number": "1080841335769",
+    "project_id": "appxlstore",
+    "storage_bucket": "appxlstore.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:420544796421:android:5e9e71a05ce1af13a0c96c",
+        "mobilesdk_app_id": "1:1080841335769:android:8fe3a30815b1ada11e9fc8",
         "android_client_info": {
-          "package_name": "com.exel.exel_ott"
+          "package_name": "com.appXLStore"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBCfi62fvg_hcg4xTqejLP3KO1Phb4OVF0"
+          "current_key": "AIzaSyBaz5DQ2JxIP-ay3jJKgHZ69X9TInhsa0U"
         }
       ],
       "services": {

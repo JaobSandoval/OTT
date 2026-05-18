@@ -1,4 +1,3 @@
-{
-  "exelInfoUsuarioUrl": "https://xls.exel.mx:6983/AI/AI.asmx/InfoUsuario",
-  "apiBaseUrl": "https://example.com"
-}
+{
+  "exelInfoUsuarioUrl": "https://xls.exel.mx:6983/AI/AI.asmx/InfoUsuario"
+}
