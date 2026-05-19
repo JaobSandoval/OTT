@@ -37,7 +37,7 @@ class AppRouter {
             final onOtp = state.uri.path.endsWith('/otp');
             return AppShell(
               auth: _authController,
-              title: onOtp ? 'Código' : 'Ventas Exel',
+              title: onOtp ? 'Código' : 'App XLStore',
               child: child,
             );
           },

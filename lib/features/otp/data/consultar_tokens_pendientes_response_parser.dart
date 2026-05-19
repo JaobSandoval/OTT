@@ -26,7 +26,7 @@ class ConsultarTokensPendientesResponseParser {
   static List<PendingToken> parse(String xml) {
     final trimmed = xml.trim();
     if (trimmed.isEmpty) {
-      throw Exception('ConsultarTokensPendientes: respuesta vacía.');
+      throw Exception('No hay respuesta del servidor. Intenta más tarde.');
     }
 
     if (trimmed.contains('soap:Fault') || trimmed.contains(':Fault>')) {
@@ -81,7 +81,7 @@ class ConsultarTokensPendientesResponseParser {
 
     final msg = _textIn(operacion, 'MensajeError');
     throw Exception(
-      msg.isEmpty ? 'ConsultarTokensPendientes: operación rechazada.' : msg,
+      msg.isEmpty ? 'No se pudo obtener el código. Intenta de nuevo.' : msg,
     );
   }
 

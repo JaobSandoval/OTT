@@ -62,8 +62,7 @@ class OtpExelRepository implements OtpRepository {
     final ids = LoginRegistrarTokenResponseParser.securityIds(login.profile);
     if (!ids.isComplete) {
       throw Exception(
-        'No se obtuvo IdCliente del servidor. IdCliente="${ids.idCliente}", '
-        'IdUsuario="${ids.idUsuario}".',
+        'No se pudo verificar tu cuenta. Cierra sesión e ingresa de nuevo.',
       );
     }
 

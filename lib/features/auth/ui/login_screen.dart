@@ -17,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   late final TextEditingController _passCtrl;
 
   String? _error;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -88,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextFormField(
                       controller: _userCtrl,
                       decoration: InputDecoration(
-                        labelText: AppConfig.useExelAuth ? 'Usuario' : 'Correo / Usuario',
+                        hintText: AppConfig.useExelAuth ? 'Usuario' : 'Correo / Usuario',
                         border: const OutlineInputBorder(),
                       ),
                       keyboardType: AppConfig.useExelAuth
@@ -102,11 +103,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _passCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Contraseña',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        hintText: 'Contraseña',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          tooltip: _obscurePassword ? 'Mostrar contraseña' : 'Ocultar contraseña',
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          ),
+                        ),
                       ),
-                      obscureText: true,
+                      obscureText: _obscurePassword,
                       validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                       onFieldSubmitted: (_) => _submit(),
                     ),
@@ -131,19 +139,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    if (!AppConfig.useExelAuth) ...[
+                    if (AppConfig.useExelAuth)
+                      Text(
+                        'Usuario y contraseña de la XLStore',
+                        style: theme.textTheme.bodySmall,
+                        textAlign: TextAlign.center,
+                      )
+                    else
                       Text(
                         'Demo: demo@exel.com.mx / demo',
                         style: theme.textTheme.bodySmall,
                         textAlign: TextAlign.center,
                       ),
-                    ] else ...[
-                      Text(
-                        'Usuario y contraseña Exel. Se registra el dispositivo para notificaciones.',
-                        style: theme.textTheme.bodySmall,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
                   ],
                 ),
               ),

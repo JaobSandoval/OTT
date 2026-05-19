@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:exel_ott/core/auth/exel_security_ids.dart';
+import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:xml/xml.dart';
 
 /// Parsea `clsResultadoLoginMovil` (XML directo o dentro de `{"d":"..."}` ASP.NET).
@@ -24,12 +25,12 @@ class LoginRegistrarTokenResponseParser {
     }
 
     if (data is! String) {
-      throw Exception('LoginRegistrarToken: formato de respuesta no reconocido.');
+      throw Exception('No pudimos validar tu acceso. Intenta de nuevo.');
     }
 
     final trimmed = data.trim();
     if (trimmed.isEmpty) {
-      throw Exception('LoginRegistrarToken: respuesta vacía.');
+      throw Exception('El servidor no respondió. Intenta más tarde.');
     }
 
     if (trimmed.startsWith('<')) {
@@ -48,10 +49,10 @@ class LoginRegistrarTokenResponseParser {
       return const {};
     }
     if (trimmed.toLowerCase() == 'false') {
-      throw Exception('LoginRegistrarToken: credenciales o registro rechazado.');
+      throw Exception(kInvalidCredentialsMessage);
     }
 
-    throw Exception('LoginRegistrarToken: $trimmed');
+    throw Exception(kInvalidCredentialsMessage);
   }
 
   static bool _isLoginProfileMap(Map<String, dynamic> map) {
@@ -70,8 +71,8 @@ class LoginRegistrarTokenResponseParser {
     final mensajeError = _textIn(operacion, 'MensajeError');
     throw Exception(
       mensajeError.isEmpty
-          ? 'LoginRegistrarToken: operación rechazada.'
-          : mensajeError,
+          ? kInvalidCredentialsMessage
+          : friendlyErrorMessage(Exception(mensajeError)),
     );
   }
 
@@ -82,7 +83,7 @@ class LoginRegistrarTokenResponseParser {
       if (ok is bool && !ok) {
         final msg = resultado['MensajeError']?.toString().trim() ?? '';
         throw Exception(
-          msg.isEmpty ? 'LoginRegistrarToken: operación rechazada.' : msg,
+          msg.isEmpty ? kInvalidCredentialsMessage : friendlyErrorMessage(Exception(msg)),
         );
       }
     }

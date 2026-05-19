@@ -9,7 +9,7 @@ class AppShell extends StatelessWidget {
     super.key,
     required this.auth,
     required this.child,
-    this.title = 'Ventas Exel',
+    this.title = 'App XLStore',
   });
 
   final AuthController auth;

@@ -1,9 +1,9 @@
 import 'package:exel_ott/core/config/app_config.dart';
+import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/core/notifications/local_notifications_service.dart';
 import 'package:exel_ott/features/otp/domain/otp_code.dart';
 import 'package:exel_ott/features/otp/domain/otp_repository.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 class OtpScreen extends StatefulWidget {
   const OtpScreen({
@@ -39,7 +39,7 @@ class _OtpScreenState extends State<OtpScreen> {
       final otp = await widget.otpRepository.fetchCurrent();
       setState(() => _otp = otp);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = friendlyErrorMessage(e));
     } finally {
       setState(() => _loading = false);
     }
@@ -58,9 +58,6 @@ class _OtpScreenState extends State<OtpScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final expires = _otp?.expiresAt;
-    final expiresText =
-        expires == null ? '—' : DateFormat('HH:mm:ss').format(expires.toLocal());
 
     return SafeArea(
       child: Padding(
@@ -93,8 +90,6 @@ class _OtpScreenState extends State<OtpScreen> {
                           letterSpacing: 2,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text('Expira: $expiresText'),
                       const SizedBox(height: 18),
                       FilledButton.icon(
                         onPressed: _loading ? null : _refresh,
@@ -118,12 +113,6 @@ class _OtpScreenState extends State<OtpScreen> {
                     ],
                   ),
                 ),
-              ),
-              Text(
-                'Las notificaciones push usan Firebase (FCM). '
-                'En primer plano Android muestra aviso local; al tocar, abre esta pantalla.',
-                style: theme.textTheme.bodySmall,
-                textAlign: TextAlign.center,
               ),
             ],
           ),

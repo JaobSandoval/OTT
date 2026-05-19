@@ -58,7 +58,7 @@ class ConsultarTokensPendientesApi {
         // ignore
       }
     }
-    return 'Error al consultar tokens ($status).';
+    return 'No se pudo obtener el código. Intenta más tarde.';
   }
 
   String _buildEnvelope({

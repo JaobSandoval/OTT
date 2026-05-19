@@ -1,9 +1,9 @@
 import 'package:exel_ott/core/auth/auth_controller.dart';
-import 'package:exel_ott/core/config/app_config.dart';
+import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/utils/external_url.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key, required this.auth});
@@ -15,6 +15,12 @@ class AppDrawer extends StatelessWidget {
     final user = auth.user;
     final color = Theme.of(context).colorScheme.primary;
     final now = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+    final config = AppRuntimeEndpoints.instance;
+
+    Future<void> openAndClose(String? url) async {
+      Navigator.of(context).pop();
+      await openExternalUrl(context, url);
+    }
 
     return Drawer(
       child: Column(
@@ -44,7 +50,7 @@ class AppDrawer extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Ventas Exel',
+                        config.displayAppName,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -73,19 +79,8 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 8),
-                      FutureBuilder(
-                        future: PackageInfo.fromPlatform(),
-                        builder: (context, snapshot) {
-                          final version = snapshot.data?.version ?? '—';
-                          return Text(
-                            'Versión $version',
-                            style: const TextStyle(color: Colors.white70),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 4),
                       Text(
-                        AppConfig.appName,
+                        'Versión ${config.displayVersion}',
                         style: const TextStyle(color: Colors.white70),
                       ),
                     ],
@@ -104,6 +99,18 @@ class AppDrawer extends StatelessWidget {
           ),
           const Divider(height: 0),
           ListTile(
+            leading: const Icon(Icons.language),
+            title: const Text('Sitio Exel'),
+            onTap: () => openAndClose(config.urlExel),
+          ),
+          const Divider(height: 0),
+          ListTile(
+            leading: const Icon(Icons.storefront_outlined),
+            title: const Text('XL Store'),
+            onTap: () => openAndClose(config.urlXlStore),
+          ),
+          const Divider(height: 0),
+          ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Cerrar Sesión'),
             onTap: () async {
@@ -115,8 +122,7 @@ class AppDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.system_update_alt),
             title: const Text('Actualizar Versión'),
-            subtitle: const Text('Pendiente'),
-            onTap: () => Navigator.of(context).pop(),
+            onTap: () => openAndClose(config.storeUpdateUrl),
           ),
           const Spacer(),
           Padding(

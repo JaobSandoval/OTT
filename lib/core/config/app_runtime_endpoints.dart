@@ -1,10 +1,9 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:exel_ott/core/config/app_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-
-import 'package:exel_ott/core/config/app_config.dart';
 
 /// Endpoints resueltos en tiempo de ejecución.
 ///
@@ -31,6 +30,8 @@ class AppRuntimeEndpoints {
   String? _configVersion;
   String? _urlExel;
   String? _urlXlStore;
+  String? _urlGooglePlay;
+  String? _urlAppStore;
 
   String get exelInfoUsuarioUrl => _exelInfoUsuarioUrl;
   String get apiBaseUrl => _apiBaseUrl;
@@ -38,6 +39,23 @@ class AppRuntimeEndpoints {
   String? get configVersion => _configVersion;
   String? get urlExel => _urlExel;
   String? get urlXlStore => _urlXlStore;
+  String? get urlGooglePlay => _urlGooglePlay;
+  String? get urlAppStore => _urlAppStore;
+
+  /// Tienda según plataforma (Android → Play, iOS → App Store).
+  String? get storeUpdateUrl {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        return _urlAppStore;
+      case TargetPlatform.android:
+        return _urlGooglePlay;
+      default:
+        return _urlGooglePlay ?? _urlAppStore;
+    }
+  }
+
+  String get displayAppName => _nombreApp ?? AppConfig.appName;
+  String get displayVersion => _configVersion ?? '—';
 
   /// Carga asset local y luego intenta fusionar el JSON remoto.
   Future<void> load() async {
@@ -103,6 +121,11 @@ class AppRuntimeEndpoints {
     _urlXlStore =
         _pickString(map, const ['urlXLStore', 'urlXlStore', 'UrlXLStore']) ??
             _urlXlStore;
+    _urlGooglePlay =
+        _pickString(map, const ['urlGooglePlay', 'UrlGooglePlay']) ??
+            _urlGooglePlay;
+    _urlAppStore =
+        _pickString(map, const ['urlAppStore', 'UrlAppStore']) ?? _urlAppStore;
   }
 
   String? _pickString(Map<String, dynamic> map, List<String> keys) {

@@ -1,4 +1,5 @@
 import 'package:exel_ott/core/auth/session_store.dart';
+import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/auth/domain/auth_repository.dart';
 import 'package:exel_ott/features/auth/domain/user.dart';
 import 'package:flutter/foundation.dart';
@@ -48,7 +49,7 @@ class AuthController extends ChangeNotifier {
       await _sessionStore.writeToken(result.token);
       return null;
     } catch (e) {
-      return e.toString();
+      return friendlyErrorMessage(e);
     } finally {
       _loading = false;
       notifyListeners();

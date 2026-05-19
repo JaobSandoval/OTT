@@ -74,10 +74,7 @@ class LoginRegistrarTokenApi {
         // ignore
       }
     }
-    if (status == 500) {
-      return 'Error en el servidor de login ($status).';
-    }
-    return 'Error en el servidor de login ($status).';
+    return 'El servicio no está disponible. Intenta más tarde.';
   }
 
   String _buildEnvelope({
