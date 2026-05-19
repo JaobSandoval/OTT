@@ -32,20 +32,28 @@ class AppRouter {
           path: '/login',
           builder: (context, state) => LoginScreen(auth: _authController),
         ),
-        GoRoute(
-          path: '/home',
-          builder: (context, state) => HomeShell(
-            auth: _authController,
-            otpRepository: _otpRepository,
-            notifications: _notifications,
-          ),
+        ShellRoute(
+          builder: (context, state, child) {
+            final onOtp = state.uri.path.endsWith('/otp');
+            return AppShell(
+              auth: _authController,
+              title: onOtp ? 'Código' : 'Ventas Exel',
+              child: child,
+            );
+          },
           routes: [
             GoRoute(
-              path: 'otp',
-              builder: (context, state) => OtpScreen(
-                otpRepository: _otpRepository,
-                notifications: _notifications,
-              ),
+              path: '/home',
+              builder: (context, state) => const HomeScreen(),
+              routes: [
+                GoRoute(
+                  path: 'otp',
+                  builder: (context, state) => OtpScreen(
+                    otpRepository: _otpRepository,
+                    notifications: _notifications,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -63,4 +71,3 @@ class AppRouter {
 
   late final GoRouter router;
 }
-

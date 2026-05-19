@@ -4,6 +4,8 @@ class SessionStore {
   static const _tokenKey = 'access_token';
   static const _exelUsuarioKey = 'exel_usuario';
   static const _exelIdUsuarioKey = 'exel_id_usuario'; // migración
+  static const _exelIdClienteKey = 'exel_id_cliente';
+  static const _exelIdUsuarioNumericKey = 'exel_id_usuario_numeric';
   static const _exelPasswordKey = 'exel_password';
   static const _exelUserNameKey = 'exel_user_name';
   static const _exelUserEmailKey = 'exel_user_email';
@@ -21,12 +23,20 @@ class SessionStore {
   Future<void> writeExelSession({
     required String usuario,
     required String password,
+    String? idCliente,
+    String? idUsuario,
     String? userName,
     String? userEmail,
     String? userRegions,
   }) async {
     await _storage.write(key: _exelUsuarioKey, value: usuario);
     await _storage.write(key: _exelPasswordKey, value: password);
+    if (idCliente != null && idCliente.isNotEmpty) {
+      await _storage.write(key: _exelIdClienteKey, value: idCliente);
+    }
+    if (idUsuario != null && idUsuario.isNotEmpty) {
+      await _storage.write(key: _exelIdUsuarioNumericKey, value: idUsuario);
+    }
     if (userName != null) {
       await _storage.write(key: _exelUserNameKey, value: userName);
     }
@@ -48,6 +58,14 @@ class SessionStore {
     return (usuario: usuario, password: password);
   }
 
+  Future<({String idCliente, String idUsuario})?> readExelSecurityIds() async {
+    final idCliente = (await _storage.read(key: _exelIdClienteKey))?.trim() ?? '';
+    final idUsuario =
+        (await _storage.read(key: _exelIdUsuarioNumericKey))?.trim() ?? '';
+    if (idCliente.isEmpty || idUsuario.isEmpty) return null;
+    return (idCliente: idCliente, idUsuario: idUsuario);
+  }
+
   Future<({String name, String email, String regions})?> readExelUserProfile() async {
     final name = await _storage.read(key: _exelUserNameKey);
     final email = await _storage.read(key: _exelUserEmailKey);
@@ -64,6 +82,8 @@ class SessionStore {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _exelUsuarioKey);
     await _storage.delete(key: _exelIdUsuarioKey);
+    await _storage.delete(key: _exelIdClienteKey);
+    await _storage.delete(key: _exelIdUsuarioNumericKey);
     await _storage.delete(key: _exelPasswordKey);
     await _storage.delete(key: _exelUserNameKey);
     await _storage.delete(key: _exelUserEmailKey);

@@ -1,10 +1,15 @@
 import 'dart:convert';
 
+import 'package:exel_ott/core/auth/exel_security_ids.dart';
 import 'package:xml/xml.dart';
 
 /// Parsea `clsResultadoLoginMovil` (XML directo o dentro de `{"d":"..."}` ASP.NET).
 class LoginRegistrarTokenResponseParser {
   const LoginRegistrarTokenResponseParser._();
+
+  /// IDs para `ConsultarTokensPendientes` a partir del perfil normalizado.
+  static ExelSecurityIds securityIds(Map<String, dynamic> profile) =>
+      exelSecurityIdsFromProfile(profile);
 
   static Map<String, dynamic> parse(dynamic data) {
     if (data is Map) {
@@ -55,6 +60,21 @@ class LoginRegistrarTokenResponseParser {
         map.containsKey('Usuario');
   }
 
+  static void _ensureSuccessFromXml(XmlElement root) {
+    final operacion = _firstElement(root, 'ResultadoOperacion');
+    if (operacion == null) return;
+
+    final operacionExitosa = _bool(_textIn(operacion, 'OperacionExitosa'));
+    if (operacionExitosa) return;
+
+    final mensajeError = _textIn(operacion, 'MensajeError');
+    throw Exception(
+      mensajeError.isEmpty
+          ? 'LoginRegistrarToken: operación rechazada.'
+          : mensajeError,
+    );
+  }
+
   static void _ensureSuccessFromMap(Map<String, dynamic> map) {
     final resultado = map['ResultadoOperacion'];
     if (resultado is Map) {
@@ -75,7 +95,8 @@ class LoginRegistrarTokenResponseParser {
     final nombreCompleto = _str(map['NombreCompleto']);
     final email = usuarioMap != null ? _str(usuarioMap['Email']) : '';
     final usuarioLogin = usuarioMap != null ? _str(usuarioMap['Usuario']) : '';
-    final idUsuario = usuarioMap != null ? _str(usuarioMap['Id_Usuario']) : '';
+
+    final ids = exelSecurityIdsFromProfile(map);
 
     return {
       'NombreCompleto': nombreCompleto,
@@ -84,9 +105,9 @@ class LoginRegistrarTokenResponseParser {
       'email': email,
       'Usuario': usuarioLogin,
       'usuario': usuarioLogin,
-      'Id_Usuario': idUsuario,
+      'Id_Usuario': ids.idUsuario,
       'IdLocalidad': _str(map['IdLocalidad']),
-      'IdCliente': _str(map['IdCliente']),
+      'IdCliente': ids.idCliente,
       'TokenRegistrado': map['TokenRegistrado'] == true ||
           _str(map['TokenRegistrado']).toLowerCase() == 'true',
     };
@@ -109,38 +130,36 @@ class LoginRegistrarTokenResponseParser {
     final root =
         _firstElement(doc.rootElement, 'clsResultadoLoginMovil') ?? doc.rootElement;
 
-    final operacionExitosa = _bool(_textIn(root, 'OperacionExitosa'));
-    final mensajeError = _textIn(root, 'MensajeError');
-
-    if (!operacionExitosa) {
-      throw Exception(
-        mensajeError.isEmpty
-            ? 'LoginRegistrarToken: operación rechazada.'
-            : mensajeError,
-      );
-    }
+    _ensureSuccessFromXml(root);
 
     final usuarioNode = _firstElement(root, 'Usuario');
     final email = usuarioNode != null ? _textIn(usuarioNode, 'Email') : '';
     final usuarioLogin = usuarioNode != null ? _textIn(usuarioNode, 'Usuario') : '';
-    final idUsuario = usuarioNode != null ? _textIn(usuarioNode, 'Id_Usuario') : '';
+    final idUsuarioNode =
+        usuarioNode != null ? _textIn(usuarioNode, 'Id_Usuario') : '';
 
     final nombreCompleto = _textIn(root, 'NombreCompleto');
     final idLocalidad = _textIn(root, 'IdLocalidad');
     final idCliente = _textIn(root, 'IdCliente');
     final tokenRegistrado = _bool(_textIn(root, 'TokenRegistrado'));
 
-    return {
+    final raw = {
       'NombreCompleto': nombreCompleto,
       'nombre': nombreCompleto,
       'Email': email,
       'email': email,
       'Usuario': usuarioLogin,
       'usuario': usuarioLogin,
-      'Id_Usuario': idUsuario,
+      'Id_Usuario': idUsuarioNode,
       'IdLocalidad': idLocalidad,
       'IdCliente': idCliente,
       'TokenRegistrado': tokenRegistrado,
+    };
+    final ids = exelSecurityIdsFromProfile(raw);
+    return {
+      ...raw,
+      'Id_Usuario': ids.idUsuario,
+      'IdCliente': ids.idCliente,
     };
   }
 

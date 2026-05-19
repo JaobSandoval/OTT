@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "1080841335769",
-    "project_id": "appxlstore",
-    "storage_bucket": "appxlstore.firebasestorage.app"
+    "project_number": "53460567987",
+    "project_id": "appxlstore-8519d",
+    "storage_bucket": "appxlstore-8519d.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1080841335769:android:8fe3a30815b1ada11e9fc8",
+        "mobilesdk_app_id": "1:53460567987:android:b8c36c8e0bc45cb1f06dc6",
         "android_client_info": {
           "package_name": "com.appXLStore"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBaz5DQ2JxIP-ay3jJKgHZ69X9TInhsa0U"
+          "current_key": "AIzaSyASl7Jh4utN28HTdDfrQp4KGjE7-a8nisI"
         }
       ],
       "services": {

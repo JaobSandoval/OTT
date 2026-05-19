@@ -46,7 +46,7 @@ class _ExelOttAppState extends State<ExelOttApp> {
     _otpRepository = AppConfig.useMockApi
         ? OtpMockRepository()
         : AppConfig.useExelAuth
-            ? OtpExelRepository()
+            ? OtpExelRepository(sessionStore: _sessionStore)
             : OtpApiRepository(sessionStore: _sessionStore);
 
     _authController = AuthController(

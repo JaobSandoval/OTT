@@ -62,10 +62,8 @@ class _OtpScreenState extends State<OtpScreen> {
     final expiresText =
         expires == null ? '—' : DateFormat('HH:mm:ss').format(expires.toLocal());
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Código')),
-      body: SafeArea(
-        child: Padding(
+    return SafeArea(
+      child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
@@ -130,7 +128,6 @@ class _OtpScreenState extends State<OtpScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/notifications/push_notification_service.dart';
 import 'package:exel_ott/features/auth/data/login_registrar_token_api.dart';
+import 'package:exel_ott/features/auth/data/login_registrar_token_response_parser.dart';
 import 'package:exel_ott/features/auth/domain/auth_repository.dart';
 import 'package:exel_ott/features/auth/domain/user.dart';
 
@@ -93,9 +94,14 @@ class AuthExelRepository implements AuthRepository {
       profile: result.profile,
     );
 
+    final securityIds =
+        LoginRegistrarTokenResponseParser.securityIds(result.profile);
+
     await _sessionStore.writeExelSession(
       usuario: usuarioSesion,
       password: password,
+      idCliente: securityIds.idCliente,
+      idUsuario: securityIds.idUsuario,
       userName: user.name,
       userEmail: user.email,
       userRegions: user.regions,
@@ -124,9 +130,14 @@ class AuthExelRepository implements AuthRepository {
         profile: result.profile,
         stored: stored,
       );
+      final securityIds =
+          LoginRegistrarTokenResponseParser.securityIds(result.profile);
+
       await _sessionStore.writeExelSession(
         usuario: creds.usuario,
         password: creds.password,
+        idCliente: securityIds.idCliente,
+        idUsuario: securityIds.idUsuario,
         userName: user.name,
         userEmail: user.email,
         userRegions: user.regions,

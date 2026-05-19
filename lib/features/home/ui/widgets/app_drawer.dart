@@ -1,6 +1,7 @@
 import 'package:exel_ott/core/auth/auth_controller.dart';
 import 'package:exel_ott/core/config/app_config.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -94,9 +95,12 @@ class AppDrawer extends StatelessWidget {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.attach_money),
-            title: const Text('Ventas'),
-            onTap: () => Navigator.of(context).pop(),
+            leading: const Icon(Icons.pin),
+            title: const Text('Ver código'),
+            onTap: () {
+              Navigator.of(context).pop();
+              context.go('/home/otp');
+            },
           ),
           const Divider(height: 0),
           ListTile(
@@ -127,4 +131,3 @@ class AppDrawer extends StatelessWidget {
     );
   }
 }
-
