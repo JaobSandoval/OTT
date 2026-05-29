@@ -1,4 +1,5 @@
 import 'package:exel_ott/core/auth/session_store.dart';
+import 'package:exel_ott/core/debug/technical_log_store.dart';
 import 'package:exel_ott/core/notifications/push_notification_service.dart';
 import 'package:exel_ott/features/auth/data/login_registrar_token_api.dart';
 import 'package:exel_ott/features/auth/data/login_registrar_token_response_parser.dart';
@@ -70,6 +71,14 @@ class AuthExelRepository implements AuthRepository {
     required String password,
   }) async {
     final fcmToken = await PushNotificationService.instance.getFcmToken();
+    TechnicalLogStore.instance.info(
+      'FCM',
+      'Token FCM obtenido para login',
+      fields: {
+        'token': fcmToken.isEmpty ? '(vacío — sin GMS o sin permisos)' : fcmToken,
+        'length': '${fcmToken.length}',
+      },
+    );
     return _loginApi.login(
       usuario: usuario,
       password: password,
@@ -107,8 +116,11 @@ class AuthExelRepository implements AuthRepository {
       userRegions: user.regions,
     );
 
-    final token = 'exel_${usuarioSesion}_${DateTime.now().millisecondsSinceEpoch}';
-    return AuthResult(token: token, user: user);
+    final sessionToken =
+        'exel_${usuarioSesion}_${DateTime.now().millisecondsSinceEpoch}';
+    await _sessionStore.writeToken(sessionToken);
+
+    return AuthResult(token: sessionToken, user: user);
   }
 
   @override

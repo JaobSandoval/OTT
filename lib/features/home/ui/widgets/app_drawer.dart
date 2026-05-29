@@ -80,7 +80,7 @@ class AppDrawer extends StatelessWidget {
                       ],
                       const SizedBox(height: 8),
                       Text(
-                        'Versión ${config.displayVersion}',
+                        'Versión 1.0.8',
                         style: const TextStyle(color: Colors.white70),
                       ),
                     ],

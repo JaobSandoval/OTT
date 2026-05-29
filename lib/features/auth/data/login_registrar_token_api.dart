@@ -1,6 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:exel_ott/core/config/app_config.dart';
+import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/debug/technical_log_store.dart';
 import 'package:exel_ott/core/device/device_registration_info.dart';
+import 'package:exel_ott/core/network/debug_dio.dart';
 import 'package:exel_ott/features/auth/data/login_registrar_token_response_parser.dart';
 
 /// Resultado de `LoginRegistrarToken` (`clsResultadoLoginMovil`).
@@ -12,7 +15,7 @@ class LoginRegistrarTokenResult {
 
 /// Llama `LoginRegistrarToken` vía SOAP 1.1 (este WS no expone JSON ScriptService).
 class LoginRegistrarTokenApi {
-  LoginRegistrarTokenApi({Dio? dio}) : _dio = dio ?? Dio();
+  LoginRegistrarTokenApi({Dio? dio}) : _dio = dio ?? createDebugDio();
 
   static const _soapAction = 'http://tempuri.org/LoginRegistrarToken';
   static const _tempUri = 'http://tempuri.org/';
@@ -26,6 +29,22 @@ class LoginRegistrarTokenApi {
     DeviceRegistrationInfo? device,
   }) async {
     final info = device ?? await DeviceRegistrationInfo.collect();
+    TechnicalLogStore.instance.info(
+      'AUTH',
+      'LoginRegistrarToken — campos enviados',
+      fields: {
+        'url': AppRuntimeEndpoints.instance.loginRegistrarTokenSoapUrl,
+        'IdAplicacion': AppConfig.exelIdAplicacion,
+        'Usuario': usuario,
+        'Password': '***',
+        'TokenFirebase': tokenFirebase.isEmpty ? '(vacío)' : tokenFirebase,
+        'TokenFirebaseLength': '${tokenFirebase.length}',
+        'Plataforma': info.plataforma,
+        'Modelo': info.modelo,
+        'VersionSO': info.versionSo,
+        'AppVersion': info.appVersion,
+      },
+    );
     final envelope = _buildEnvelope(
       idAplicacion: AppConfig.exelIdAplicacion,
       usuario: usuario,
@@ -39,7 +58,7 @@ class LoginRegistrarTokenApi {
 
     try {
       final res = await _dio.post<String>(
-        AppConfig.loginRegistrarTokenSoapUrl,
+        AppRuntimeEndpoints.instance.loginRegistrarTokenSoapUrl,
         data: envelope,
         options: Options(
           contentType: 'text/xml; charset=utf-8',
@@ -51,17 +70,53 @@ class LoginRegistrarTokenApi {
 
       final body = res.data ?? '';
       if (res.statusCode != null && res.statusCode! >= 400) {
+        TechnicalLogStore.instance.error(
+          'AUTH',
+          'LoginRegistrarToken — HTTP ${res.statusCode}',
+          statusCode: res.statusCode,
+          body: body,
+          error: _friendlyHttpError(res.statusCode!, body),
+        );
         throw Exception(_friendlyHttpError(res.statusCode!, body));
       }
 
       final profile = LoginRegistrarTokenResponseParser.parse(body);
+      TechnicalLogStore.instance.info(
+        'AUTH',
+        'LoginRegistrarToken — respuesta parseada',
+        fields: {
+          for (final e in profile.entries)
+            if (e.value != null && e.value.toString().isNotEmpty)
+              e.key: e.value.toString(),
+        },
+        body: body,
+      );
       return LoginRegistrarTokenResult(profile: profile);
     } on DioException catch (e) {
       final data = e.response?.data;
       if (data is String && data.trim().isNotEmpty) {
+        TechnicalLogStore.instance.error(
+          'AUTH',
+          'LoginRegistrarToken — DioException',
+          statusCode: e.response?.statusCode,
+          body: data,
+          error: '${e.type}: ${e.message}',
+        );
         throw Exception(_friendlyHttpError(e.response?.statusCode ?? 0, data));
       }
+      TechnicalLogStore.instance.error(
+        'AUTH',
+        'LoginRegistrarToken — sin conexión',
+        error: '${e.type}: ${e.message}',
+      );
       throw Exception('No se pudo conectar con el servidor de login.');
+    } on Exception catch (e) {
+      TechnicalLogStore.instance.error(
+        'AUTH',
+        'LoginRegistrarToken — error de parseo/negocio',
+        error: e.toString(),
+      );
+      rethrow;
     }
   }
 

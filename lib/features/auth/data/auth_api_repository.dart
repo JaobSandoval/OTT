@@ -1,13 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/debug/technical_log_store.dart';
+import 'package:exel_ott/core/network/debug_dio.dart';
 import 'package:exel_ott/features/auth/domain/auth_repository.dart';
 import 'package:exel_ott/features/auth/domain/user.dart';
 
 class AuthApiRepository implements AuthRepository {
   AuthApiRepository({required SessionStore sessionStore})
-      : _dio = Dio(
-          BaseOptions(baseUrl: AppRuntimeEndpoints.instance.apiBaseUrl),
+      : _dio = createDebugDio(
+          baseOptions: BaseOptions(baseUrl: AppRuntimeEndpoints.instance.apiBaseUrl),
         );
 
   final Dio _dio;
@@ -17,6 +19,15 @@ class AuthApiRepository implements AuthRepository {
     required String usernameOrEmail,
     required String password,
   }) async {
+    TechnicalLogStore.instance.info(
+      'AUTH',
+      'POST /auth/login — campos enviados',
+      fields: {
+        'username': usernameOrEmail,
+        'password': '***',
+        'baseUrl': AppRuntimeEndpoints.instance.apiBaseUrl,
+      },
+    );
     final res = await _dio.post<Map<String, dynamic>>(
       '/auth/login',
       data: {
@@ -28,6 +39,15 @@ class AuthApiRepository implements AuthRepository {
     final data = res.data ?? const <String, dynamic>{};
     final token = (data['access_token'] as String?) ?? '';
     final u = (data['user'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+    TechnicalLogStore.instance.info(
+      'AUTH',
+      'POST /auth/login — respuesta',
+      fields: {
+        'access_token': token.isEmpty ? '(vacío)' : '${token.substring(0, token.length.clamp(0, 12))}…',
+        'user.name': (u['name'] as String?) ?? '',
+        'user.email': (u['email'] as String?) ?? '',
+      },
+    );
     return AuthResult(
       token: token,
       user: User(

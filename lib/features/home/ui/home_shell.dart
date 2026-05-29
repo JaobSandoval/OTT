@@ -3,25 +3,75 @@ import 'package:exel_ott/features/home/ui/widgets/app_drawer.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-/// Contenedor con menú lateral (datos del cliente, cerrar sesión, actualizar).
+/// Contenedor con menú lateral y pestañas inferiores (Inicio / Productos).
 class AppShell extends StatelessWidget {
   const AppShell({
     super.key,
     required this.auth,
     required this.child,
     this.title = 'App XLStore',
+    this.showBottomNav = true,
+    this.bottomNavIndex = 0,
+    this.showBackButton = false,
   });
 
   final AuthController auth;
   final Widget child;
   final String title;
+  final bool showBottomNav;
+  final int bottomNavIndex;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        leading: showBackButton
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.pop(),
+              )
+            : null,
+        actions: showBackButton
+            ? [
+                Builder(
+                  builder: (ctx) => IconButton(
+                    icon: const Icon(Icons.menu),
+                    tooltip: 'Menú',
+                    onPressed: () => Scaffold.of(ctx).openDrawer(),
+                  ),
+                ),
+              ]
+            : null,
+      ),
       drawer: AppDrawer(auth: auth),
       body: child,
+      bottomNavigationBar: showBottomNav
+          ? NavigationBar(
+              selectedIndex: bottomNavIndex,
+              onDestinationSelected: (index) {
+                switch (index) {
+                  case 0:
+                    context.go('/home');
+                  case 1:
+                    context.go('/home/products');
+                }
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: 'Inicio',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.search_outlined),
+                  selectedIcon: Icon(Icons.search),
+                  label: 'Productos',
+                ),
+              ],
+            )
+          : null,
     );
   }
 }
@@ -44,12 +94,14 @@ class HomeScreen extends StatelessWidget {
             children: [
               Text(
                 'Bienvenido',
-                style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
-                'Abre el menú lateral para ver tu información o consulta el código de confirmación.',
+                'Usa la pestaña Productos para buscar artículos, o abre el menú lateral para ver tu información.',
                 style: theme.textTheme.bodyMedium,
                 textAlign: TextAlign.center,
               ),

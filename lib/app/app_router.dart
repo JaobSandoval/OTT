@@ -4,6 +4,10 @@ import 'package:exel_ott/features/auth/ui/login_screen.dart';
 import 'package:exel_ott/features/home/ui/home_shell.dart';
 import 'package:exel_ott/features/otp/domain/otp_repository.dart';
 import 'package:exel_ott/features/otp/ui/otp_screen.dart';
+import 'package:exel_ott/features/products/data/products_repository.dart';
+import 'package:exel_ott/features/products/domain/product_card.dart';
+import 'package:exel_ott/features/products/ui/product_detail_screen.dart';
+import 'package:exel_ott/features/products/ui/products_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -12,9 +16,11 @@ class AppRouter {
     required AuthController authController,
     required OtpRepository otpRepository,
     required LocalNotificationsService notifications,
+    required ProductsRepository productsRepository,
   })  : _authController = authController,
         _otpRepository = otpRepository,
-        _notifications = notifications {
+        _notifications = notifications,
+        _productsRepository = productsRepository {
     router = GoRouter(
       initialLocation: '/home',
       refreshListenable: _authController,
@@ -34,10 +40,23 @@ class AppRouter {
         ),
         ShellRoute(
           builder: (context, state, child) {
-            final onOtp = state.uri.path.endsWith('/otp');
+            final path = state.uri.path;
+            final onOtp = path.endsWith('/otp');
+            final onProducts = path.contains('/products');
+            final onDetail = path.contains('/detail/');
+            final title = onOtp
+                ? 'Código'
+                : onDetail
+                    ? 'Detalle'
+                    : onProducts
+                        ? 'Productos'
+                        : 'App XLStore';
             return AppShell(
               auth: _authController,
-              title: onOtp ? 'Código' : 'App XLStore',
+              title: title,
+              showBottomNav: !onOtp && !onDetail,
+              bottomNavIndex: onProducts && !onDetail ? 1 : 0,
+              showBackButton: onOtp || onDetail,
               child: child,
             );
           },
@@ -52,6 +71,28 @@ class AppRouter {
                     otpRepository: _otpRepository,
                     notifications: _notifications,
                   ),
+                ),
+                GoRoute(
+                  path: 'products',
+                  builder: (context, state) => ProductsScreen(
+                    productsRepository: _productsRepository,
+                  ),
+                  routes: [
+                    GoRoute(
+                      path: 'detail/:idProducto',
+                      builder: (context, state) {
+                        final initial = state.extra;
+                        return ProductDetailScreen(
+                          idProducto:
+                              state.pathParameters['idProducto'] ?? '',
+                          repository: _productsRepository,
+                          initialProduct: initial is ProductCard
+                              ? initial
+                              : null,
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -68,6 +109,7 @@ class AppRouter {
   final AuthController _authController;
   final OtpRepository _otpRepository;
   final LocalNotificationsService _notifications;
+  final ProductsRepository _productsRepository;
 
   late final GoRouter router;
 }

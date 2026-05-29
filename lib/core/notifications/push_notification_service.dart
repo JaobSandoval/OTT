@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:exel_ott/core/debug/technical_log_store.dart';
 import 'package:exel_ott/core/notifications/local_notifications_service.dart';
 
 /// Texto por defecto si el servidor no envía título/cuerpo en el payload `notification`.
@@ -36,6 +37,7 @@ class PushNotificationService {
 
     if (Firebase.apps.isEmpty) {
       debugPrint('PushNotificationService: Firebase no inicializado; FCM omitido.');
+      _techLog('Firebase no inicializado; FCM omitido.');
       return;
     }
 
@@ -57,19 +59,33 @@ class PushNotificationService {
       sound: true,
     );
     debugPrint('PushNotificationService: permiso FCM = ${settings.authorizationStatus}');
+    _techLog(
+      'Permiso FCM',
+      fields: {'authorizationStatus': settings.authorizationStatus.name},
+    );
 
     try {
       _cachedFcmToken = await messaging.getToken();
       debugPrint(
         'PushNotificationService: FCM token (para pruebas / backend): $_cachedFcmToken',
       );
+      _techLog(
+        'FCM token leído',
+        fields: {
+          'token': (_cachedFcmToken == null || _cachedFcmToken!.isEmpty)
+              ? '(vacío)'
+              : _cachedFcmToken!,
+        },
+      );
     } on Object catch (e) {
       debugPrint('PushNotificationService: no se pudo leer FCM token: $e');
+      _techLog('No se pudo leer FCM token', error: e.toString());
     }
 
     messaging.onTokenRefresh.listen((token) {
       _cachedFcmToken = token;
       debugPrint('PushNotificationService: FCM token actualizado');
+      _techLog('FCM token actualizado', fields: {'token': token});
     });
 
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
@@ -134,5 +150,14 @@ class PushNotificationService {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       router.go('/home/otp');
     });
+  }
+
+  void _techLog(String title, {Map<String, String>? fields, String? error}) {
+    if (!TechnicalLogStore.instance.isEnabled) return;
+    if (error != null) {
+      TechnicalLogStore.instance.error('FCM', title, fields: fields, error: error);
+    } else {
+      TechnicalLogStore.instance.info('FCM', title, fields: fields);
+    }
   }
 }

@@ -1,14 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/network/debug_dio.dart';
 import 'package:exel_ott/features/otp/domain/otp_code.dart';
 import 'package:exel_ott/features/otp/domain/otp_repository.dart';
 
 class OtpApiRepository implements OtpRepository {
   OtpApiRepository({required SessionStore sessionStore})
       : _sessionStore = sessionStore,
-        _dio = Dio(
-          BaseOptions(baseUrl: AppRuntimeEndpoints.instance.apiBaseUrl),
+        _dio = createDebugDio(
+          baseOptions: BaseOptions(baseUrl: AppRuntimeEndpoints.instance.apiBaseUrl),
         );
 
   final SessionStore _sessionStore;

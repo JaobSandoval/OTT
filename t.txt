@@ -1,0 +1,67 @@
+
+
+        [WebMethod]
+        public clsResultadoConsultarTokenOperacion ConsultarTokensPendientes(
+       string IdCliente,
+       string IdUsuario)
+        {
+            string Funcionalidad = "APISeguridad_ConsultarTokensPendientes";
+            Dictionary<string, string> ParametrosEntrada = new Dictionary<string, string>
+    {
+        { "IdCliente", IdCliente },
+        { "IdUsuario", IdUsuario }
+    };
+            Dictionary<string, string> ParametrosSalida = new Dictionary<string, string>();
+            clsResultadoConsultarTokenOperacion Resultado = new clsResultadoConsultarTokenOperacion();
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(IdCliente))
+                    throw new Exception("El IdCliente es requerido");
+
+                if (string.IsNullOrWhiteSpace(IdUsuario))
+                    throw new Exception("El IdUsuario es requerido");
+
+                if (!int.TryParse(IdUsuario, out int IntIdUsuario))
+                    throw new Exception("El IdUsuario debe ser numérico");
+
+                brTokenOperacion br = new brTokenOperacion();
+                List<clsTokenOperacion> tokens = br.ConsultarTokensPendientes(
+                    IdCliente, IntIdUsuario, out string sSQL);
+
+                ParametrosSalida.Add("Query", sSQL);
+
+                if (tokens.Count == 0)
+                    throw new Exception(
+                        $"No se encontraron tokens pendientes para el cliente {IdCliente} y usuario {IdUsuario}");
+
+                Resultado.Tokens = tokens;
+                Resultado.TotalTokens = tokens.Count;
+                Resultado.ResultadoOperacion.OperacionExitosa = true;
+
+                ParametrosSalida.Add("ResultadoSalida",
+                    JsonConvert.SerializeObject(Resultado, Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                Funcionalidad += "_Error";
+                Resultado.ResultadoOperacion.OperacionExitosa = false;
+                Resultado.ResultadoOperacion.MensajeError = ex.Message;
+
+                ParametrosSalida.Add("Error_Exception", ex.Message);
+                ParametrosSalida.Add("Error_StackTrace", ex.StackTrace);
+                if (ex.InnerException != null)
+                    ParametrosSalida.Add("Error_InnerException", ex.InnerException.Message);
+            }
+            finally
+            {
+                clsUtilerias.GenerarLog(
+                    Constantes.DirectorioLogs,
+                    Funcionalidad,
+                    IdUsuario,
+                    ParametrosEntrada,
+                    ParametrosSalida);
+            }
+
+            return Resultado;
+        }

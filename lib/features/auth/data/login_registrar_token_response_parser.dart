@@ -143,7 +143,6 @@ class LoginRegistrarTokenResponseParser {
     final idLocalidad = _textIn(root, 'IdLocalidad');
     final idCliente = _textIn(root, 'IdCliente');
     final tokenRegistrado = _bool(_textIn(root, 'TokenRegistrado'));
-
     final raw = {
       'NombreCompleto': nombreCompleto,
       'nombre': nombreCompleto,

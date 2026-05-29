@@ -1,5 +1,9 @@
 import 'package:exel_ott/core/auth/auth_controller.dart';
 import 'package:exel_ott/core/config/app_config.dart';
+import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/debug/debug_terminal_gate.dart';
+import 'package:exel_ott/core/debug/technical_log_store.dart';
+import 'package:exel_ott/core/utils/external_url.dart';
 import 'package:flutter/material.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -40,6 +44,21 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
+
+    if (DebugTerminalGate.matches(
+      user: _userCtrl.text.trim(),
+      pass: _passCtrl.text,
+    )) {
+      TechnicalLogStore.instance.enable();
+      TechnicalLogStore.instance.info(
+        'SYSTEM',
+        'Terminal técnica activada',
+        fields: {
+          'plataforma': Theme.of(context).platform.name,
+        },
+      );
+      return;
+    }
 
     final err = await widget.auth.login(
       usernameOrEmail: _userCtrl.text,
@@ -118,6 +137,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                       onFieldSubmitted: (_) => _submit(),
                     ),
+                    if (AppConfig.useExelAuth) ...[
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => openExternalUrl(
+                            context,
+                            AppRuntimeEndpoints.instance.urlHazOlvidadoTuContrasena,
+                          ),
+                          child: const Text('¿Olvidaste tu contraseña?'),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     if (_error != null) ...[
                       Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
@@ -139,13 +170,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    if (AppConfig.useExelAuth)
+                    if (AppConfig.useExelAuth) ...[
                       Text(
                         'Usuario y contraseña de la XLStore',
                         style: theme.textTheme.bodySmall,
                         textAlign: TextAlign.center,
-                      )
-                    else
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => openExternalUrl(
+                          context,
+                          AppRuntimeEndpoints.instance.urlAltaDeCliente,
+                        ),
+                        child: const Text('¿No tienes cuenta? Regístrate'),
+                      ),
+                    ] else
                       Text(
                         'Demo: demo@exel.com.mx / demo',
                         style: theme.textTheme.bodySmall,

@@ -1,11 +1,13 @@
 import 'package:dio/dio.dart';
-import 'package:exel_ott/core/config/app_config.dart';
+import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/debug/technical_log_store.dart';
+import 'package:exel_ott/core/network/debug_dio.dart';
 import 'package:exel_ott/features/auth/data/login_registrar_token_response_parser.dart';
 import 'package:exel_ott/features/otp/data/consultar_tokens_pendientes_response_parser.dart';
 
 /// Llama `ConsultarToken` vía SOAP 1.1 (mismo WS que login).
 class ConsultarTokensPendientesApi {
-  ConsultarTokensPendientesApi({Dio? dio}) : _dio = dio ?? Dio();
+  ConsultarTokensPendientesApi({Dio? dio}) : _dio = dio ?? createDebugDio();
 
   static const _operation = 'ConsultarToken';
   static const _soapAction = 'http://tempuri.org/$_operation';
@@ -22,9 +24,19 @@ class ConsultarTokensPendientesApi {
       idUsuario: idUsuario,
     );
 
+    TechnicalLogStore.instance.info(
+      'OTP',
+      'ConsultarToken — campos enviados',
+      fields: {
+        'url': AppRuntimeEndpoints.instance.loginRegistrarTokenSoapUrl,
+        'IdCliente': idCliente,
+        'IdUsuario': idUsuario,
+      },
+    );
+
     try {
       final res = await _dio.post<String>(
-        AppConfig.loginRegistrarTokenSoapUrl,
+        AppRuntimeEndpoints.instance.loginRegistrarTokenSoapUrl,
         data: envelope,
         options: Options(
           contentType: 'text/xml; charset=utf-8',
@@ -36,16 +48,52 @@ class ConsultarTokensPendientesApi {
 
       final body = res.data ?? '';
       if (res.statusCode != null && res.statusCode! >= 400) {
+        TechnicalLogStore.instance.error(
+          'OTP',
+          'ConsultarToken — HTTP ${res.statusCode}',
+          statusCode: res.statusCode,
+          body: body,
+          error: _friendlyHttpError(res.statusCode!, body),
+        );
         throw Exception(_friendlyHttpError(res.statusCode!, body));
       }
 
-      return ConsultarTokensPendientesResponseParser.parse(body);
+      final tokens = ConsultarTokensPendientesResponseParser.parse(body);
+      TechnicalLogStore.instance.info(
+        'OTP',
+        'ConsultarToken — ${tokens.length} token(s) recibido(s)',
+        fields: {
+          for (var i = 0; i < tokens.length && i < 5; i++)
+            'token[$i]': tokens[i].token,
+        },
+        body: body,
+      );
+      return tokens;
     } on DioException catch (e) {
       final data = e.response?.data;
       if (data is String && data.trim().isNotEmpty) {
+        TechnicalLogStore.instance.error(
+          'OTP',
+          'ConsultarToken — DioException',
+          statusCode: e.response?.statusCode,
+          body: data,
+          error: '${e.type}: ${e.message}',
+        );
         throw Exception(_friendlyHttpError(e.response?.statusCode ?? 0, data));
       }
+      TechnicalLogStore.instance.error(
+        'OTP',
+        'ConsultarToken — sin conexión',
+        error: '${e.type}: ${e.message}',
+      );
       throw Exception('No se pudo consultar el código de validación.');
+    } on Exception catch (e) {
+      TechnicalLogStore.instance.error(
+        'OTP',
+        'ConsultarToken — error de parseo/negocio',
+        error: e.toString(),
+      );
+      rethrow;
     }
   }
 
