@@ -16,7 +16,7 @@ void openInAppUrl(BuildContext context, String? url) {
     return;
   }
 
-  context.push('/home/web?url=${Uri.encodeComponent(trimmed)}');
+  context.push('/web?url=${Uri.encodeComponent(trimmed)}');
 }
 
 Future<void> openExternalUrl(BuildContext context, String? url) async {

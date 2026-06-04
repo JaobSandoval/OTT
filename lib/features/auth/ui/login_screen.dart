@@ -204,7 +204,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Align(
                                   alignment: Alignment.centerRight,
                                   child: TextButton(
-                                    onPressed: () => openExternalUrl(
+                                    onPressed: () => openInAppUrl(
                                       context,
                                       AppRuntimeEndpoints
                                           .instance.urlHazOlvidadoTuContrasena,
@@ -259,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           textAlign: TextAlign.center,
                         ),
                         TextButton(
-                          onPressed: () => openExternalUrl(
+                          onPressed: () => openInAppUrl(
                             context,
                             AppRuntimeEndpoints.instance.urlAltaDeCliente,
                           ),

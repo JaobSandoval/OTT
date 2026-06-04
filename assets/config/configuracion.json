@@ -2,6 +2,8 @@
   "exelInfoUsuarioUrl": "https://xls.exel.mx:6983/AI/AI.asmx/InfoUsuario",
   "loginRegistrarTokenSoapUrl": "https://www.exel.com.mx/APISeguridad/WS.asmx",
   "urlApiXLMovil": "https://www.exel.com.mx/apiXLMovil/",
+  "urlExel": "https://www.exel.com.mx/",
+  "urlXLStore": "https://www.exel.com.mx/xlstore/",
   "urlHazOlvidadoTuContraseña": "https://www.exel.com.mx/xlstore/Recuperar",
   "urlAltaDeCliente": "https://www.exel.com.mx/AltaSocio/Solicitud.aspx"
 }

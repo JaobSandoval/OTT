@@ -67,5 +67,17 @@ class AppConfig {
     defaultValue:
         'https://www.exel.com.mx/AplicacionConfiguracion/appXLStore/configuracion.json',
   );
+
+  /// Fallback si el JSON no trae estas claves (menú lateral / WebView).
+  static const String defaultUrlExel = 'https://www.exel.com.mx/';
+  static const String defaultUrlXlStore = 'https://www.exel.com.mx/xlstore/';
+  static const String defaultUrlGooglePlay =
+      'https://play.google.com/store/apps/details?id=com.appXLStore';
+  static const String defaultUrlAppStore =
+      'https://apps.apple.com/app/id0000000000';
+  static const String defaultUrlHazOlvidadoTuContrasena =
+      'https://www.exel.com.mx/xlstore/Recuperar';
+  static const String defaultUrlAltaDeCliente =
+      'https://www.exel.com.mx/AltaSocio/Solicitud.aspx';
 }
 

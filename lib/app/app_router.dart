@@ -15,6 +15,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 class AppRouter {
+  static final GlobalKey<NavigatorState> rootNavigatorKey =
+      GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> shellNavigatorKey =
+      GlobalKey<NavigatorState>();
+
   AppRouter({
     required AuthController authController,
     required OtpRepository otpRepository,
@@ -27,13 +32,17 @@ class AppRouter {
         _productsRepository = productsRepository,
         _cartRepository = cartRepository {
     router = GoRouter(
+      navigatorKey: rootNavigatorKey,
       initialLocation: '/home',
       refreshListenable: _authController,
       redirect: (context, state) {
-        final isLoggingIn = state.matchedLocation == '/login';
+        final path = state.uri.path;
+        final isLoggingIn = path == '/login';
+        final isWeb = path == '/web';
         final signedIn = _authController.isSignedIn;
         if (!signedIn) {
-          return isLoggingIn ? null : '/login';
+          if (isLoggingIn || isWeb) return null;
+          return '/login';
         }
         if (signedIn && isLoggingIn) return '/home';
         return null;
@@ -43,7 +52,17 @@ class AppRouter {
           path: '/login',
           builder: (context, state) => LoginScreen(auth: _authController),
         ),
+        GoRoute(
+          path: '/web',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) {
+            final encoded = state.uri.queryParameters['url'] ?? '';
+            final url = Uri.decodeComponent(encoded);
+            return InAppWebViewScreen(initialUrl: url);
+          },
+        ),
         ShellRoute(
+          navigatorKey: shellNavigatorKey,
           builder: (context, state, child) {
             final path = state.uri.path;
             final onHome = path == '/home';
@@ -51,7 +70,6 @@ class AppRouter {
             final onProducts = path.contains('/products');
             final onDetail = path.contains('/detail/');
             final onCart = path.endsWith('/cart');
-            final onWeb = path.endsWith('/web');
             final title = onOtp
                 ? 'Código'
                 : onCart
@@ -64,8 +82,8 @@ class AppRouter {
             return AppShell(
               auth: _authController,
               title: title,
-              showAppBar: !onHome && !onWeb,
-              showBottomNav: !onOtp && !onDetail && !onCart && !onWeb,
+              showAppBar: !onHome,
+              showBottomNav: !onOtp && !onDetail && !onCart,
               bottomNavIndex: onProducts && !onDetail ? 1 : 0,
               showBackButton: onOtp || onDetail || onCart,
               child: child,
@@ -76,14 +94,6 @@ class AppRouter {
               path: '/home',
               builder: (context, state) => const HomeScreen(),
               routes: [
-                GoRoute(
-                  path: 'web',
-                  builder: (context, state) {
-                    final encoded = state.uri.queryParameters['url'] ?? '';
-                    final url = Uri.decodeComponent(encoded);
-                    return InAppWebViewScreen(initialUrl: url);
-                  },
-                ),
                 GoRoute(
                   path: 'otp',
                   builder: (context, state) => OtpScreen(

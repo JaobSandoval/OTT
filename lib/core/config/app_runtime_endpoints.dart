@@ -46,22 +46,24 @@ class AppRuntimeEndpoints {
   String get loginRegistrarTokenSoapUrl => _loginRegistrarTokenSoapUrl;
   String? get nombreApp => _nombreApp;
   String? get configVersion => _configVersion;
-  String? get urlExel => _urlExel;
-  String? get urlXlStore => _urlXlStore;
-  String? get urlGooglePlay => _urlGooglePlay;
-  String? get urlAppStore => _urlAppStore;
-  String? get urlHazOlvidadoTuContrasena => _urlHazOlvidadoTuContrasena;
-  String? get urlAltaDeCliente => _urlAltaDeCliente;
+  String get urlExel => _urlExel ?? AppConfig.defaultUrlExel;
+  String get urlXlStore => _urlXlStore ?? AppConfig.defaultUrlXlStore;
+  String get urlGooglePlay => _urlGooglePlay ?? AppConfig.defaultUrlGooglePlay;
+  String get urlAppStore => _urlAppStore ?? AppConfig.defaultUrlAppStore;
+  String get urlHazOlvidadoTuContrasena =>
+      _urlHazOlvidadoTuContrasena ?? AppConfig.defaultUrlHazOlvidadoTuContrasena;
+  String get urlAltaDeCliente =>
+      _urlAltaDeCliente ?? AppConfig.defaultUrlAltaDeCliente;
 
   /// Tienda según plataforma (Android → Play, iOS → App Store).
-  String? get storeUpdateUrl {
+  String get storeUpdateUrl {
     switch (defaultTargetPlatform) {
       case TargetPlatform.iOS:
-        return _urlAppStore;
+        return urlAppStore;
       case TargetPlatform.android:
-        return _urlGooglePlay;
+        return urlGooglePlay;
       default:
-        return _urlGooglePlay ?? _urlAppStore;
+        return urlGooglePlay;
     }
   }
 
@@ -70,7 +72,7 @@ class AppRuntimeEndpoints {
 
   /// URL del carrito en XLStore para confirmar el pedido en el navegador.
   String get miCarritoUrl {
-    final base = (_urlXlStore ?? '').trim();
+    final base = urlXlStore.trim();
     if (base.isEmpty) {
       return 'https://www.exel.com.mx/xlstore/Carrito/MiCarrito';
     }
