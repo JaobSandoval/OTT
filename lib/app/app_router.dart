@@ -1,6 +1,7 @@
 import 'package:exel_ott/core/auth/auth_controller.dart';
 import 'package:exel_ott/core/notifications/local_notifications_service.dart';
 import 'package:exel_ott/features/auth/ui/login_screen.dart';
+import 'package:exel_ott/core/ui/in_app_webview_screen.dart';
 import 'package:exel_ott/features/home/ui/home_shell.dart';
 import 'package:exel_ott/features/otp/domain/otp_repository.dart';
 import 'package:exel_ott/features/otp/ui/otp_screen.dart';
@@ -50,6 +51,7 @@ class AppRouter {
             final onProducts = path.contains('/products');
             final onDetail = path.contains('/detail/');
             final onCart = path.endsWith('/cart');
+            final onWeb = path.endsWith('/web');
             final title = onOtp
                 ? 'Código'
                 : onCart
@@ -62,8 +64,8 @@ class AppRouter {
             return AppShell(
               auth: _authController,
               title: title,
-              showAppBar: !onHome,
-              showBottomNav: !onOtp && !onDetail && !onCart,
+              showAppBar: !onHome && !onWeb,
+              showBottomNav: !onOtp && !onDetail && !onCart && !onWeb,
               bottomNavIndex: onProducts && !onDetail ? 1 : 0,
               showBackButton: onOtp || onDetail || onCart,
               child: child,
@@ -74,6 +76,14 @@ class AppRouter {
               path: '/home',
               builder: (context, state) => const HomeScreen(),
               routes: [
+                GoRoute(
+                  path: 'web',
+                  builder: (context, state) {
+                    final encoded = state.uri.queryParameters['url'] ?? '';
+                    final url = Uri.decodeComponent(encoded);
+                    return InAppWebViewScreen(initialUrl: url);
+                  },
+                ),
                 GoRoute(
                   path: 'otp',
                   builder: (context, state) => OtpScreen(

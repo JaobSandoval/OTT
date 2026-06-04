@@ -1,5 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+/// Abre un enlace dentro de la app (WebView embebido).
+void openInAppUrl(BuildContext context, String? url) {
+  final trimmed = url?.trim() ?? '';
+  if (trimmed.isEmpty) {
+    _showError(context, 'Enlace no disponible.');
+    return;
+  }
+
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null || !uri.hasScheme) {
+    _showError(context, 'Enlace no válido.');
+    return;
+  }
+
+  context.push('/home/web?url=${Uri.encodeComponent(trimmed)}');
+}
 
 Future<void> openExternalUrl(BuildContext context, String? url) async {
   final trimmed = url?.trim() ?? '';

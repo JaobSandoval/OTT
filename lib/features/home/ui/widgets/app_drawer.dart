@@ -19,9 +19,9 @@ class AppDrawer extends StatelessWidget {
     final now = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
     final config = AppRuntimeEndpoints.instance;
 
-    Future<void> openAndClose(String? url) async {
+    void openInAppAndClose(String? url) {
       Navigator.of(context).pop();
-      await openExternalUrl(context, url);
+      openInAppUrl(context, url);
     }
 
     return Drawer(
@@ -127,17 +127,17 @@ class AppDrawer extends StatelessWidget {
             _DrawerItem(
               icon: Icons.language_outlined,
               label: 'Sitio Exel',
-              onTap: () => openAndClose(config.urlExel),
+              onTap: () => openInAppAndClose(config.urlExel),
             ),
             _DrawerItem(
               icon: Icons.storefront_outlined,
               label: 'XL Store',
-              onTap: () => openAndClose(config.urlXlStore),
+              onTap: () => openInAppAndClose(config.urlXlStore),
             ),
             _DrawerItem(
               icon: Icons.system_update_alt_outlined,
               label: 'Actualizar Versión',
-              onTap: () => openAndClose(config.storeUpdateUrl),
+              onTap: () => openInAppAndClose(config.storeUpdateUrl),
             ),
             const Spacer(),
             Padding(
