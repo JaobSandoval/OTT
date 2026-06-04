@@ -1,6 +1,7 @@
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
 import 'package:exel_ott/features/products/data/apixlmovil_api.dart';
+import 'package:exel_ott/features/products/data/apixlmovil_product_parsers.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/products/domain/product_detail.dart';
 import 'package:exel_ott/features/products/domain/product_search_filters.dart';
@@ -16,10 +17,14 @@ class ProductsRepository {
   final ApiXlMovilApi _api;
   final Map<String, String?> _precioCache = {};
   final Set<String> _precioLoaded = {};
+  final Map<String, ({String sucursal, String nacional})> _existenciaCache = {};
+  final Set<String> _existenciaLoaded = {};
 
   void clearPrecioCache() {
     _precioCache.clear();
     _precioLoaded.clear();
+    _existenciaCache.clear();
+    _existenciaLoaded.clear();
   }
 
   String? getCachedPrecio(String idProducto) {
@@ -69,6 +74,38 @@ class ProductsRepository {
     );
   }
 
+  bool hasCachedExistencia(String idProducto) =>
+      _existenciaLoaded.contains(idProducto);
+
+  ({String sucursal, String nacional})? getCachedExistencia(String idProducto) {
+    if (!_existenciaLoaded.contains(idProducto)) return null;
+    return _existenciaCache[idProducto];
+  }
+
+  Future<({String sucursal, String nacional})> fetchExistencia(
+    String idProducto,
+  ) async {
+    if (_existenciaLoaded.contains(idProducto)) {
+      return _existenciaCache[idProducto]!;
+    }
+
+    final creds = await _credentials();
+    final sucursal = await _sessionStore.readExelSucursal();
+    final payload = await _api.productoPrecioExistencia(
+      idUsuario: creds.idUsuario,
+      password: creds.password,
+      idProducto: idProducto,
+    );
+    final summary = ApiXlMovilProductParsers.parseExistenciaSummary(
+      payload,
+      idLocalidadUsuario: sucursal?.idSucursal,
+      sucursalNombreUsuario: sucursal?.sucursalNombre,
+    );
+    _existenciaLoaded.add(idProducto);
+    _existenciaCache[idProducto] = summary;
+    return summary;
+  }
+
   Future<String?> fetchPrecio(String idProducto) async {
     if (_precioLoaded.contains(idProducto)) {
       return _precioCache[idProducto];
@@ -87,8 +124,8 @@ class ProductsRepository {
 
   Future<ProductDetail> fetchDetail(String idProducto) async {
     final creds = await _credentials();
-    final profile = await _sessionStore.readExelUserProfile();
-    final idLocalidad = profile?.regions.split(',').first.trim();
+    final sucursal = await _sessionStore.readExelSucursal();
+    final idLocalidad = sucursal?.idSucursal;
 
     return _api.loadProductDetail(
       idUsuario: creds.idUsuario,

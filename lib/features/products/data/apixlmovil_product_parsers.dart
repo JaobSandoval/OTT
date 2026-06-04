@@ -24,6 +24,68 @@ class ApiXlMovilProductParsers {
     return precio.isEmpty ? null : precio;
   }
 
+  /// Resumen de existencia para tarjetas (sucursal del usuario + total nacional).
+  static ({String sucursal, String nacional}) parseExistenciaSummary(
+    String payload, {
+    String? idLocalidadUsuario,
+    String? sucursalNombreUsuario,
+  }) {
+    final existenciaDecoded = _decodeJson(payload);
+    final map = _firstMap(existenciaDecoded) ?? {};
+
+    var sucursal = _pick(map, [
+      'Existencia',
+      'existencia',
+      'Existencia_Sucursal',
+      'existencia_sucursal',
+    ]);
+    var nacional = _pick(map, [
+      'ExistenciaNacional',
+      'existenciaNacional',
+      'existencia_MX',
+      'Existencia_MX',
+    ]);
+
+    final existenciasRaw = map['existencias'];
+    var nacionalFromList = 0;
+    var sucursalFromList = '';
+
+    if (existenciasRaw is List) {
+      for (final item in existenciasRaw) {
+        if (item is! Map) continue;
+        final row = Map<String, dynamic>.from(item);
+        final existencia = _pick(row, ['existencia', 'Existencia']);
+        final localidad = _pick(row, ['localidad', 'Localidad']);
+        final idLoc = _pick(row, ['id_localidad', 'idLocalidad', 'Id_Localidad']);
+        final qty = parseStockQuantity(existencia) ?? 0;
+        nacionalFromList += qty;
+
+        final idMatch = idLocalidadUsuario != null &&
+            idLocalidadUsuario.isNotEmpty &&
+            idLoc.isNotEmpty &&
+            idLoc == idLocalidadUsuario;
+        final nameMatch = sucursalNombreUsuario != null &&
+            sucursalNombreUsuario.isNotEmpty &&
+            localidad.isNotEmpty &&
+            localidad.toLowerCase() == sucursalNombreUsuario.toLowerCase();
+
+        if ((idMatch || nameMatch) && qty > 0) {
+          sucursalFromList =
+              existencia.isNotEmpty ? existencia : '$qty';
+        }
+      }
+    }
+
+    if (sucursal.isEmpty && sucursalFromList.isNotEmpty) {
+      sucursal = sucursalFromList;
+    }
+    if (nacional.isEmpty && nacionalFromList > 0) {
+      nacional = '$nacionalFromList';
+    }
+
+    return (sucursal: sucursal, nacional: nacional);
+  }
+
   static ProductDetail parseDetail({
     required String idProducto,
     required String existenciaPayload,
@@ -72,8 +134,8 @@ class ApiXlMovilProductParsers {
       if (a.esSucursalUsuario != b.esSucursalUsuario) {
         return a.esSucursalUsuario ? -1 : 1;
       }
-      final ea = int.tryParse(a.existencia) ?? 0;
-      final eb = int.tryParse(b.existencia) ?? 0;
+      final ea = parseStockQuantity(a.existencia) ?? 0;
+      final eb = parseStockQuantity(b.existencia) ?? 0;
       return eb.compareTo(ea);
     });
 

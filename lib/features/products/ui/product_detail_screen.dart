@@ -1,19 +1,26 @@
+import 'package:exel_ott/core/theme/app_colors.dart';
+import 'package:exel_ott/core/theme/app_decorations.dart';
+import 'package:exel_ott/core/theme/app_widgets.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
+import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/products/domain/product_detail.dart';
 import 'package:flutter/material.dart';
+import 'package:exel_ott/features/products/ui/product_add_to_cart_helpers.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   const ProductDetailScreen({
     super.key,
     required this.idProducto,
     required this.repository,
+    required this.cartRepository,
     this.initialProduct,
   });
 
   final String idProducto;
   final ProductsRepository repository;
+  final CartRepository cartRepository;
   final ProductCard? initialProduct;
 
   @override
@@ -23,6 +30,7 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   ProductDetail? _detail;
   bool _loading = true;
+  bool _addingToCart = false;
   String? _error;
 
   @override
@@ -49,6 +57,75 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _loading = false;
         _error = friendlyErrorMessage(e);
       });
+    }
+  }
+
+  Future<void> _onExistenciaTap(ExistenciaSucursal existencia) async {
+    final detail = _detail;
+    if (detail == null || _addingToCart) return;
+
+    final idSucursal = await widget.cartRepository.readIdSucursalUsuario();
+    final pickable = widget.cartRepository.pickableLocations(detail, idSucursal);
+    if (pickable.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay sucursal con stock para agregar.'),
+          duration: Duration(seconds: 5),
+        ),
+      );
+      return;
+    }
+
+    ({ExistenciaSucursal row, String locationId}) selected;
+    final match = pickable.where((p) => p.row.localidad == existencia.localidad);
+    if (match.length == 1) {
+      selected = match.first;
+    } else if (pickable.length == 1) {
+      selected = pickable.first;
+    } else {
+      if (!mounted) return;
+      final picked = await showModalBottomSheet<({ExistenciaSucursal row, String locationId})>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Elegir sucursal',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+              ...pickable.map(
+                (p) => ListTile(
+                  title: Text(p.row.localidad),
+                  subtitle: Text('${p.row.existencia} disponibles'),
+                  onTap: () => Navigator.pop(ctx, p),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (picked == null || !mounted) return;
+      selected = picked;
+    }
+
+    if (!mounted) return;
+    setState(() => _addingToCart = true);
+    try {
+      await addProductToCart(
+        context: context,
+        cartRepository: widget.cartRepository,
+        idProducto: detail.idProducto,
+        selected: selected,
+      );
+    } finally {
+      if (mounted) setState(() => _addingToCart = false);
     }
   }
 
@@ -88,7 +165,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 Text(
                   codigoProveedor,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.primary,
+                    color: AppColors.catalogAccent,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.3,
                   ),
@@ -123,6 +200,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       child: _InfoColumn(
                         detail: detail,
                         loading: _loading,
+                        addingToCart: _addingToCart,
+                        onExistenciaTap: _onExistenciaTap,
                       ),
                     ),
                   ],
@@ -134,7 +213,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   idProducto: widget.idProducto,
                 ),
                 const SizedBox(height: 20),
-                _InfoColumn(detail: detail, loading: _loading),
+                _InfoColumn(
+                  detail: detail,
+                  loading: _loading,
+                  addingToCart: _addingToCart,
+                  onExistenciaTap: _onExistenciaTap,
+                ),
               ],
             ]),
           ),
@@ -181,7 +265,7 @@ class _SummaryColumn extends StatelessWidget {
           Text(
             _formatPrecio(precio),
             style: theme.textTheme.headlineSmall?.copyWith(
-              color: theme.colorScheme.primary,
+              color: AppColors.catalogAccent,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -190,7 +274,7 @@ class _SummaryColumn extends StatelessWidget {
           Text(
             'ID producto: $id',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: AppColors.textSecondary,
             ),
           ),
         ],
@@ -250,12 +334,9 @@ class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: theme.dividerColor),
-            borderRadius: BorderRadius.circular(8),
-          ),
+          decoration: AppDecorations.softCard(radius: AppDecorations.radiusLg),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppDecorations.radiusLg),
             child: SizedBox(
               height: 260,
               child: PageView.builder(
@@ -264,14 +345,26 @@ class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
                 onPageChanged: (i) => setState(() => _index = i),
                 itemBuilder: (context, index) {
                   return Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(16),
                     child: Image.network(
                       urls[index],
                       fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.catalogAccent,
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        );
+                      },
                       errorBuilder: (context, error, stackTrace) => Icon(
                         Icons.image_not_supported_outlined,
                         size: 64,
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   );
@@ -281,7 +374,7 @@ class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
           ),
         ),
         if (urls.length > 1) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(urls.length, (i) {
@@ -289,13 +382,13 @@ class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: selected ? 10 : 8,
-                height: selected ? 10 : 8,
+                width: selected ? 8 : 6,
+                height: selected ? 8 : 6,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: selected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.outlineVariant,
+                      ? AppColors.catalogAccent
+                      : AppColors.borderLight,
                 ),
               );
             }),
@@ -304,7 +397,7 @@ class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
           Text(
             '${_index + 1} / ${urls.length}',
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: AppColors.textSecondary,
             ),
           ),
         ],
@@ -314,10 +407,17 @@ class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
 }
 
 class _InfoColumn extends StatelessWidget {
-  const _InfoColumn({required this.detail, required this.loading});
+  const _InfoColumn({
+    required this.detail,
+    required this.loading,
+    required this.addingToCart,
+    required this.onExistenciaTap,
+  });
 
   final ProductDetail? detail;
   final bool loading;
+  final bool addingToCart;
+  final void Function(ExistenciaSucursal) onExistenciaTap;
 
   @override
   Widget build(BuildContext context) {
@@ -329,80 +429,79 @@ class _InfoColumn extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'INFORMACIÓN DEL PRODUCTO',
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: theme.colorScheme.primary,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
+        const AppSectionLabel(text: 'Información del producto'),
+        const SizedBox(height: 12),
+        AppSoftCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 20,
+                    color: AppColors.catalogAccent,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Detalles del producto',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (loading && ficha.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (ficha.isEmpty)
+                Text(
+                  'Sin ficha técnica disponible.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                )
+              else
+                _FichaTable(rows: ficha),
+            ],
           ),
         ),
-        const SizedBox(height: 4),
-        Container(
-          height: 3,
-          width: 48,
-          color: theme.colorScheme.primary,
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Icon(Icons.info_outline, size: 20, color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
-            Text(
-              'Detalles del producto',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
+        const SizedBox(height: 20),
+        const AppSectionLabel(text: 'Existencia'),
         const SizedBox(height: 12),
-        if (loading && ficha.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (ficha.isEmpty)
-          Text(
-            'Sin ficha técnica disponible.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          )
-        else
-          _FichaTable(rows: ficha),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              size: 20,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Existencia',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+        AppSoftCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (loading && existencias.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (existencias.isEmpty)
+                Text(
+                  'Sin información de existencias.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                )
+              else
+                ...existencias.map(
+                  (e) => _ExistenciaCard(
+                    existencia: e,
+                    canAdd: (parseStockQuantity(e.existencia) ?? 0) > 0,
+                    addingToCart: addingToCart,
+                    onTap: () => onExistenciaTap(e),
+                  ),
+                ),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
-        if (loading && existencias.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (existencias.isEmpty)
-          Text(
-            'Sin información de existencias.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          )
-        else
-          ...existencias.map((e) => _ExistenciaCard(existencia: e)),
       ],
     );
   }
@@ -418,18 +517,16 @@ class _FichaTable extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: theme.dividerColor),
-        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderLight),
+        borderRadius: BorderRadius.circular(12),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-            ),
+            color: AppColors.surface,
             child: Row(
               children: [
                 Expanded(
@@ -453,32 +550,41 @@ class _FichaTable extends StatelessWidget {
               ],
             ),
           ),
-          ...rows.map(
-            (row) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: theme.dividerColor)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      row.caracteristica,
-                      style: theme.textTheme.bodyMedium,
-                    ),
+          ...rows.asMap().entries.map(
+            (entry) {
+              final index = entry.key;
+              final row = entry.value;
+              final alt = index.isOdd;
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: alt ? AppColors.surface.withValues(alpha: 0.5) : null,
+                  border: Border(
+                    top: BorderSide(color: AppColors.borderLight),
                   ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      row.valor,
-                      style: theme.textTheme.bodyMedium,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        row.caracteristica,
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        row.valor,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -487,72 +593,110 @@ class _FichaTable extends StatelessWidget {
 }
 
 class _ExistenciaCard extends StatelessWidget {
-  const _ExistenciaCard({required this.existencia});
+  const _ExistenciaCard({
+    required this.existencia,
+    required this.canAdd,
+    required this.addingToCart,
+    required this.onTap,
+  });
 
   final ExistenciaSucursal existencia;
+  final bool canAdd;
+  final bool addingToCart;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final units = int.tryParse(existencia.existencia) ?? 0;
+    final units = parseStockQuantity(existencia.existencia) ?? 0;
     final label = units == 1
         ? '1 unidad disponible'
         : '$units unidades disponibles';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: existencia.esSucursalUsuario
-            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.35)
-            : theme.colorScheme.surface,
-        border: Border.all(
-          color: existencia.esSucursalUsuario
-              ? theme.colorScheme.primary
-              : theme.dividerColor,
-        ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                existencia.localidad.toUpperCase(),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (existencia.esSucursalUsuario)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.catalogAccent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(24),
+                ),
                 child: Text(
-                  existencia.localidad.toUpperCase(),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  'Tu sucursal',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.catalogAccent,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              if (existencia.esSucursalUsuario)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Tu sucursal',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        if (canAdd) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(
+                Icons.add_shopping_cart_outlined,
+                size: 18,
+                color: AppColors.catalogAccent,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                addingToCart ? 'Agregando…' : 'Toca para agregar al carrito',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: AppColors.catalogAccent,
+                  fontWeight: FontWeight.w600,
                 ),
+              ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
         ],
+      ],
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: existencia.esSucursalUsuario
+            ? AppColors.catalogAccent.withValues(alpha: 0.06)
+            : AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: existencia.esSucursalUsuario
+                ? AppColors.catalogAccent.withValues(alpha: 0.4)
+                : AppColors.borderLight,
+          ),
+        ),
+        child: InkWell(
+          onTap: canAdd && !addingToCart ? onTap : null,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: content,
+          ),
+        ),
       ),
     );
   }
@@ -572,10 +716,16 @@ class _ErrorBody extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Icon(
+              Icons.error_outline,
+              size: 48,
+              color: AppColors.error.withValues(alpha: 0.7),
+            ),
+            const SizedBox(height: 16),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: TextStyle(color: AppColors.error),
             ),
             const SizedBox(height: 16),
             FilledButton(onPressed: onRetry, child: const Text('Reintentar')),

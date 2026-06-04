@@ -1,4 +1,8 @@
+import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/theme/app_colors.dart';
+import 'package:exel_ott/core/theme/app_decorations.dart';
+import 'package:exel_ott/core/theme/app_widgets.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
@@ -8,9 +12,14 @@ import 'package:exel_ott/features/products/ui/widgets/products_filters_bar.dart'
 import 'package:flutter/material.dart';
 
 class ProductsScreen extends StatefulWidget {
-  const ProductsScreen({super.key, required this.productsRepository});
+  const ProductsScreen({
+    super.key,
+    required this.productsRepository,
+    required this.cartRepository,
+  });
 
   final ProductsRepository productsRepository;
+  final CartRepository cartRepository;
 
   @override
   State<ProductsScreen> createState() => _ProductsScreenState();
@@ -95,26 +104,47 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final filterOptions =
         buildContextualFilterOptions(_catalogProducts, _filters);
+    final isEmpty = _searchController.text.trim().isEmpty;
+    final noResults = _products.isEmpty && !_loading && !isEmpty;
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final listBottomPad = keyboardOpen ? 0.0 : 96.0;
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _searchController,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _runSearch(),
-            decoration: InputDecoration(
-              labelText: 'Buscar producto',
-              hintText: 'Código, descripción o marca',
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: _loading ? null : _runSearch,
+          Container(
+            decoration: AppDecorations.softCard(radius: AppDecorations.radiusXl),
+            child: TextField(
+              controller: _searchController,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _runSearch(),
+              decoration: InputDecoration(
+                hintText: 'Buscar producto...',
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: AppColors.textSecondary,
+                ),
+                suffixIcon: Container(
+                  margin: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    gradient: AppDecorations.brandGradient,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                    onPressed: _loading ? null : _runSearch,
+                  ),
+                ),
               ),
-              border: const OutlineInputBorder(),
             ),
           ),
           if (_activeQuery.isNotEmpty && filterOptions.hasOptions) ...[
@@ -130,37 +160,100 @@ class _ProductsScreenState extends State<ProductsScreen> {
           if (_loading) const LinearProgressIndicator(),
           if (_error != null) ...[
             const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.errorContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                _error!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.onErrorContainer,
+                ),
+              ),
+            ),
+          ],
+          if (_products.isNotEmpty) ...[
+            const SizedBox(height: 12),
             Text(
-              _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              '${_products.length} resultado${_products.length == 1 ? '' : 's'}',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
           const SizedBox(height: 8),
           Expanded(
-            child: _products.isEmpty && !_loading
-                ? Center(
-                    child: Text(
-                      _searchController.text.trim().isEmpty
-                          ? 'Escribe un término y pulsa buscar.'
-                          : 'Sin resultados.',
-                      textAlign: TextAlign.center,
-                    ),
+            child: isEmpty
+                ? _EmptyState(
+                    icon: Icons.search_rounded,
+                    message: 'Escribe un término y pulsa buscar.',
                   )
-                : ListView.separated(
-                    itemCount: _products.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final product = _products[index];
-                      return ProductCardTile(
-                        key: ValueKey(product.idProducto),
-                        product: product,
-                        repository: widget.productsRepository,
-                      );
-                    },
-                  ),
+                : noResults
+                    ? _EmptyState(
+                        icon: Icons.inventory_2_outlined,
+                        message: 'Sin resultados.',
+                      )
+                    : ListView.separated(
+                        padding: EdgeInsets.only(bottom: listBottomPad),
+                        itemCount: _products.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 14),
+                        itemBuilder: (context, index) {
+                          final product = _products[index];
+                          return ProductCardTile(
+                            key: ValueKey(product.idProducto),
+                            product: product,
+                            repository: widget.productsRepository,
+                            cartRepository: widget.cartRepository,
+                          );
+                        },
+                      ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: AppSoftCard(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                gradient: AppDecorations.brandGradientSoft,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 28,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }

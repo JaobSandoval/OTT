@@ -1,3 +1,5 @@
+import 'package:exel_ott/core/theme/app_colors.dart';
+import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/features/products/domain/product_search_filters.dart';
 import 'package:flutter/material.dart';
 
@@ -38,8 +40,8 @@ class _ProductsFiltersBarState extends State<ProductsFiltersBar> {
     final subOptions =
         widget.options.subcategoriasFor(widget.filters.idCategoria);
 
-    return Card(
-      margin: EdgeInsets.zero,
+    return Container(
+      decoration: AppDecorations.softCard(),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -47,36 +49,43 @@ class _ProductsFiltersBarState extends State<ProductsFiltersBar> {
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.filter_list,
-                    size: 20,
-                    color: theme.colorScheme.primary,
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      gradient: AppDecorations.brandGradientSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.tune_rounded,
+                      size: 18,
+                      color: AppColors.catalogAccent,
+                    ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Text(
                     'Filtros',
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   if (_activeCount > 0) ...[
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
+                        horizontal: 10,
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(12),
+                        gradient: AppDecorations.brandGradient,
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         '$_activeCount',
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer,
+                          color: Colors.white,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -89,8 +98,8 @@ class _ProductsFiltersBarState extends State<ProductsFiltersBar> {
                       child: const Text('Limpiar'),
                     ),
                   Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    color: theme.colorScheme.onSurfaceVariant,
+                    _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    color: AppColors.textSecondary,
                   ),
                 ],
               ),
@@ -98,7 +107,7 @@ class _ProductsFiltersBarState extends State<ProductsFiltersBar> {
           ),
           if (_expanded)
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -117,7 +126,7 @@ class _ProductsFiltersBarState extends State<ProductsFiltersBar> {
                         );
                       },
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                   ],
                   if (widget.options.hasSubcategorias) ...[
                     _FilterDropdown(
@@ -133,7 +142,7 @@ class _ProductsFiltersBarState extends State<ProductsFiltersBar> {
                         );
                       },
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                   ],
                   if (widget.options.marcas.isNotEmpty)
                     _FilterDropdown(
@@ -177,12 +186,7 @@ class _FilterDropdown extends StatelessWidget {
       key: ValueKey('$label-$value-${items.length}'),
       initialValue: value.isEmpty ? null : value,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      ),
+      decoration: InputDecoration(labelText: label),
       items: [
         const DropdownMenuItem<String>(
           value: null,

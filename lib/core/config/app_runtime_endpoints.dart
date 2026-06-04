@@ -68,6 +68,16 @@ class AppRuntimeEndpoints {
   String get displayAppName => _nombreApp ?? AppConfig.appName;
   String get displayVersion => _configVersion ?? '—';
 
+  /// URL del carrito en XLStore para confirmar el pedido en el navegador.
+  String get miCarritoUrl {
+    final base = (_urlXlStore ?? '').trim();
+    if (base.isEmpty) {
+      return 'https://www.exel.com.mx/xlstore/Carrito/MiCarrito';
+    }
+    final normalized = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    return '$normalized/Carrito/MiCarrito';
+  }
+
   /// Recarga solo el JSON remoto (p. ej. al abrir productos), sin reiniciar la app.
   Future<void> refreshRemoteConfig() async {
     if (AppConfig.skipRemoteConfig) return;

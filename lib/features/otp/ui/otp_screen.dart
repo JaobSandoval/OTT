@@ -1,9 +1,12 @@
 import 'package:exel_ott/core/config/app_config.dart';
+import 'package:exel_ott/core/theme/app_colors.dart';
+import 'package:exel_ott/core/theme/app_widgets.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/core/notifications/local_notifications_service.dart';
 import 'package:exel_ott/features/otp/domain/otp_code.dart';
 import 'package:exel_ott/features/otp/domain/otp_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class OtpScreen extends StatefulWidget {
   const OtpScreen({
@@ -58,9 +61,11 @@ class _OtpScreenState extends State<OtpScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final code = _otp?.code;
 
-    return SafeArea(
-      child: Padding(
+    return AppMeshBackground(
+      child: SafeArea(
+        child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
@@ -69,55 +74,109 @@ class _OtpScreenState extends State<OtpScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.errorContainer,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.error_outline_rounded,
+                        color: AppColors.onErrorContainer,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.onErrorContainer,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              const SizedBox(height: 12),
               Expanded(
                 child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _otp?.code ?? 'Sin código',
-                        style: theme.textTheme.displayMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 2,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 380),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppGradientBorderCard(
+                          innerPadding: const EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 36,
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                'CÓDIGO OTP',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              if (_loading)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 20),
+                                  child: CircularProgressIndicator(),
+                                )
+                              else
+                                Text(
+                                  code ?? '——',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 8,
+                                    color: code != null
+                                        ? AppColors.textPrimary
+                                        : AppColors.textSecondary,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 18),
-                      FilledButton.icon(
-                        onPressed: _loading ? null : _refresh,
-                        icon: _loading
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.refresh),
-                        label: const Text('Actualizar'),
-                      ),
-                      if (AppConfig.useMockApi) ...[
-                        const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: _simulateIncoming,
-                          icon: const Icon(Icons.notifications_active),
-                          label: const Text('Simular notificación (mock)'),
+                        const SizedBox(height: 28),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _loading ? null : _refresh,
+                            icon: _loading
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.refresh_rounded),
+                            label: const Text('Actualizar'),
+                          ),
                         ),
+                        if (AppConfig.useMockApi) ...[
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _simulateIncoming,
+                              icon: const Icon(Icons.notifications_active_outlined),
+                              label: const Text('Simular notificación (mock)'),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
             ],
           ),
         ),
+      ),
     );
   }
 }
-

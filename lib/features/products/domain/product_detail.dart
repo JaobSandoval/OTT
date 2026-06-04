@@ -48,13 +48,41 @@ class ExistenciaSucursal {
   final bool esSucursalUsuario;
 }
 
-/// Etiqueta de existencia para la lista de productos.
-String productStockLabel(String raw) {
+/// Cantidad numérica de existencia (acepta enteros, decimales y formatos del API).
+int? parseStockQuantity(String raw) {
   final trimmed = raw.trim();
-  if (trimmed.isEmpty) return 'Backorder';
-  final qty = int.tryParse(trimmed);
-  if (qty == null || qty <= 0) return 'Backorder';
-  return trimmed;
+  if (trimmed.isEmpty) return null;
+
+  final lower = trimmed.toLowerCase();
+  if (lower == 'si' ||
+      lower == 'sí' ||
+      lower == 'yes' ||
+      lower == 'disponible' ||
+      lower == 'available') {
+    return 1;
+  }
+
+  final asInt = int.tryParse(trimmed);
+  if (asInt != null) return asInt;
+
+  final normalized = trimmed.replaceAll(',', '');
+  final asDouble = double.tryParse(normalized);
+  if (asDouble != null) return asDouble.floor();
+
+  final leadingNumber = RegExp(r'(\d+)').firstMatch(normalized);
+  if (leadingNumber != null) {
+    return int.tryParse(leadingNumber.group(1)!);
+  }
+
+  return null;
 }
 
-bool productHasStock(String raw) => productStockLabel(raw) != 'Backorder';
+/// Etiqueta de existencia para la lista de productos.
+String productStockLabel(String raw, {bool pending = false}) {
+  if (pending) return '...';
+  final qty = parseStockQuantity(raw);
+  if (qty == null || qty <= 0) return 'Backorder';
+  return '$qty';
+}
+
+bool productHasStock(String raw) => (parseStockQuantity(raw) ?? 0) > 0;

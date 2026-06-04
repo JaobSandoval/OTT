@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SessionStore {
@@ -10,6 +12,9 @@ class SessionStore {
   static const _exelUserNameKey = 'exel_user_name';
   static const _exelUserEmailKey = 'exel_user_email';
   static const _exelUserRegionsKey = 'exel_user_regions';
+  static const _exelIdSucursalKey = 'exel_id_sucursal';
+  static const _exelSucursalNombreKey = 'exel_sucursal_nombre';
+  static const _cartLocationNamesKey = 'cart_location_names';
 
   final FlutterSecureStorage _storage;
 
@@ -28,6 +33,8 @@ class SessionStore {
     String? userName,
     String? userEmail,
     String? userRegions,
+    String? idSucursal,
+    String? sucursalNombre,
   }) async {
     await _storage.write(key: _exelUsuarioKey, value: usuario);
     await _storage.write(key: _exelPasswordKey, value: password);
@@ -46,6 +53,54 @@ class SessionStore {
     if (userRegions != null) {
       await _storage.write(key: _exelUserRegionsKey, value: userRegions);
     }
+    if (idSucursal != null && idSucursal.isNotEmpty) {
+      await _storage.write(key: _exelIdSucursalKey, value: idSucursal);
+    }
+    if (sucursalNombre != null && sucursalNombre.isNotEmpty) {
+      await _storage.write(key: _exelSucursalNombreKey, value: sucursalNombre);
+    }
+  }
+
+  Future<({String idSucursal, String sucursalNombre})?> readExelSucursal() async {
+    final idSucursal = (await _storage.read(key: _exelIdSucursalKey))?.trim() ?? '';
+    final sucursalNombre =
+        (await _storage.read(key: _exelSucursalNombreKey))?.trim() ?? '';
+    if (idSucursal.isEmpty && sucursalNombre.isEmpty) return null;
+    return (idSucursal: idSucursal, sucursalNombre: sucursalNombre);
+  }
+
+  Future<Map<String, String>> readCartLocationNames() async {
+    final raw = await _storage.read(key: _cartLocationNamesKey);
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return decoded.map(
+          (key, value) => MapEntry(key.toString(), value.toString()),
+        );
+      }
+    } on Object {
+      // Ignorar mapa corrupto.
+    }
+    return {};
+  }
+
+  Future<void> rememberCartLocation({
+    required String idLocalidad,
+    required String localidad,
+  }) async {
+    final id = idLocalidad.trim();
+    final name = localidad.trim();
+    if (id.isEmpty || name.isEmpty) return;
+
+    final current = await readCartLocationNames();
+    if (current[id] == name) return;
+
+    current[id] = name;
+    await _storage.write(
+      key: _cartLocationNamesKey,
+      value: jsonEncode(current),
+    );
   }
 
   Future<({String usuario, String password})?> readExelCredentials() async {
@@ -88,5 +143,8 @@ class SessionStore {
     await _storage.delete(key: _exelUserNameKey);
     await _storage.delete(key: _exelUserEmailKey);
     await _storage.delete(key: _exelUserRegionsKey);
+    await _storage.delete(key: _exelIdSucursalKey);
+    await _storage.delete(key: _exelSucursalNombreKey);
+    await _storage.delete(key: _cartLocationNamesKey);
   }
 }

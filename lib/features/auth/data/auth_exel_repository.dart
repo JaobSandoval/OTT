@@ -106,6 +106,15 @@ class AuthExelRepository implements AuthRepository {
     final securityIds =
         LoginRegistrarTokenResponseParser.securityIds(result.profile);
 
+    final idSucursal = _asString(
+      result.profile['id_sucursal'] ??
+          result.profile['IdSucursal'] ??
+          result.profile['IdLocalidad'],
+    );
+    final sucursalNombre = _asString(
+      result.profile['sucursal'] ?? result.profile['Sucursal'],
+    );
+
     await _sessionStore.writeExelSession(
       usuario: usuarioSesion,
       password: password,
@@ -114,6 +123,8 @@ class AuthExelRepository implements AuthRepository {
       userName: user.name,
       userEmail: user.email,
       userRegions: user.regions,
+      idSucursal: idSucursal.isNotEmpty ? idSucursal : null,
+      sucursalNombre: sucursalNombre.isNotEmpty ? sucursalNombre : null,
     );
 
     final sessionToken =
@@ -144,6 +155,14 @@ class AuthExelRepository implements AuthRepository {
       );
       final securityIds =
           LoginRegistrarTokenResponseParser.securityIds(result.profile);
+      final idSucursal = _asString(
+        result.profile['id_sucursal'] ??
+            result.profile['IdSucursal'] ??
+            result.profile['IdLocalidad'],
+      );
+      final sucursalNombre = _asString(
+        result.profile['sucursal'] ?? result.profile['Sucursal'],
+      );
 
       await _sessionStore.writeExelSession(
         usuario: creds.usuario,
@@ -153,6 +172,8 @@ class AuthExelRepository implements AuthRepository {
         userName: user.name,
         userEmail: user.email,
         userRegions: user.regions,
+        idSucursal: idSucursal.isNotEmpty ? idSucursal : null,
+        sucursalNombre: sucursalNombre.isNotEmpty ? sucursalNombre : null,
       );
       return user;
     } on Object {

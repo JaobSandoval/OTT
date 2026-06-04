@@ -13,8 +13,12 @@ import 'package:exel_ott/features/otp/data/otp_api_repository.dart';
 import 'package:exel_ott/features/otp/data/otp_exel_repository.dart';
 import 'package:exel_ott/features/otp/data/otp_mock_repository.dart';
 import 'package:exel_ott/features/otp/domain/otp_repository.dart';
+import 'package:exel_ott/core/theme/app_theme.dart';
+import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
+import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class ExelOttApp extends StatefulWidget {
   const ExelOttApp({super.key});
@@ -31,6 +35,7 @@ class _ExelOttAppState extends State<ExelOttApp> {
   late final AuthRepository _authRepository;
   late final OtpRepository _otpRepository;
   late final ProductsRepository _productsRepository;
+  late final CartRepository _cartRepository;
 
   late final AppRouter _appRouter;
 
@@ -53,6 +58,10 @@ class _ExelOttAppState extends State<ExelOttApp> {
             : OtpApiRepository(sessionStore: _sessionStore);
 
     _productsRepository = ProductsRepository(sessionStore: _sessionStore);
+    _cartRepository = CartRepository(
+      sessionStore: _sessionStore,
+      productsRepository: _productsRepository,
+    );
 
     _authController = AuthController(
       sessionStore: _sessionStore,
@@ -64,6 +73,7 @@ class _ExelOttAppState extends State<ExelOttApp> {
       otpRepository: _otpRepository,
       notifications: _notifications,
       productsRepository: _productsRepository,
+      cartRepository: _cartRepository,
     );
 
     _bootstrap();
@@ -98,25 +108,24 @@ class _ExelOttAppState extends State<ExelOttApp> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF4F46E5),
-    );
-
     return MaterialApp.router(
       routerConfig: _appRouter.router,
       builder: (context, child) {
-        return DebugTerminalOverlay(child: child ?? const SizedBox.shrink());
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            systemNavigationBarColor: AppColors.surface,
+            systemNavigationBarIconBrightness: Brightness.dark,
+          ),
+          child: DebugTerminalOverlay(
+            child: child ?? const SizedBox.shrink(),
+          ),
+        );
       },
       debugShowCheckedModeBanner: false,
       title: AppConfig.appName,
-      theme: ThemeData(
-        colorScheme: colorScheme,
-        useMaterial3: true,
-        appBarTheme: AppBarTheme(
-          backgroundColor: colorScheme.primary,
-          foregroundColor: colorScheme.onPrimary,
-        ),
-      ),
+      theme: AppTheme.light,
     );
   }
 }
