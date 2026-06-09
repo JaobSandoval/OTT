@@ -8,6 +8,10 @@ class ApiXlMovilBuscadorResponseParser {
   const ApiXlMovilBuscadorResponseParser._();
 
   static List<ProductCard> parse(String xml) {
+    return parseWithResultTag(xml, 'BuscadorResult');
+  }
+
+  static List<ProductCard> parseWithResultTag(String xml, String resultTag) {
     final trimmed = xml.trim();
     if (trimmed.isEmpty) {
       throw Exception('El servidor no respondió.');
@@ -19,9 +23,9 @@ class ApiXlMovilBuscadorResponseParser {
     }
 
     final doc = XmlDocument.parse(trimmed);
-    final resultNode = _firstElement(doc.rootElement, 'BuscadorResult');
+    final resultNode = _firstElement(doc.rootElement, resultTag);
     if (resultNode == null) {
-      throw Exception('Respuesta SOAP sin BuscadorResult.');
+      throw Exception('Respuesta SOAP sin $resultTag.');
     }
 
     final payload = resultNode.innerText.trim();

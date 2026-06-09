@@ -1,4 +1,5 @@
 import 'package:exel_ott/core/auth/auth_controller.dart';
+import 'package:exel_ott/core/permissions/image_scan_permission_service.dart';
 import 'package:exel_ott/core/notifications/local_notifications_service.dart';
 import 'package:exel_ott/features/auth/ui/login_screen.dart';
 import 'package:exel_ott/core/ui/in_app_webview_screen.dart';
@@ -11,6 +12,9 @@ import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/products/ui/product_detail_screen.dart';
 import 'package:exel_ott/features/products/ui/products_screen.dart';
+import 'package:exel_ott/features/visual_scan/data/visual_scan_repository.dart';
+import 'package:exel_ott/features/visual_scan/domain/visual_scan_launch_args.dart';
+import 'package:exel_ott/features/visual_scan/ui/visual_scan_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -26,11 +30,15 @@ class AppRouter {
     required LocalNotificationsService notifications,
     required ProductsRepository productsRepository,
     required CartRepository cartRepository,
+    required VisualScanRepository visualScanRepository,
+    required ImageScanPermissionService imageScanPermissionService,
   })  : _authController = authController,
         _otpRepository = otpRepository,
         _notifications = notifications,
         _productsRepository = productsRepository,
-        _cartRepository = cartRepository {
+        _cartRepository = cartRepository,
+        _visualScanRepository = visualScanRepository,
+        _imageScanPermissionService = imageScanPermissionService {
     router = GoRouter(
       navigatorKey: rootNavigatorKey,
       initialLocation: '/home',
@@ -70,10 +78,15 @@ class AppRouter {
             final onProducts = path.contains('/products');
             final onDetail = path.contains('/detail/');
             final onCart = path.endsWith('/cart');
+            final onVisualScan = path.endsWith('/visual-scan')
+                || path.endsWith('/quote-photo')
+                || path.endsWith('/product-photo-search');
             final title = onOtp
                 ? 'Código'
                 : onCart
                     ? 'Mi carrito'
+                    : onVisualScan
+                        ? 'Búsqueda visual'
                     : onDetail
                         ? _productDetailTitle(state)
                         : onProducts
@@ -81,18 +94,19 @@ class AppRouter {
                             : '';
             return AppShell(
               auth: _authController,
+              imageScanPermission: _imageScanPermissionService,
               title: title,
               showAppBar: !onHome,
-              showBottomNav: !onOtp && !onDetail && !onCart,
+              showBottomNav: !onOtp && !onDetail && !onCart && !onVisualScan,
               bottomNavIndex: onProducts && !onDetail ? 1 : 0,
-              showBackButton: onOtp || onDetail || onCart,
+              showBackButton: onOtp || onDetail || onCart || onVisualScan,
               child: child,
             );
           },
           routes: [
             GoRoute(
               path: '/home',
-              builder: (context, state) => const HomeScreen(),
+              builder: (context, state) => HomeScreen(),
               routes: [
                 GoRoute(
                   path: 'otp',
@@ -108,10 +122,41 @@ class AppRouter {
                   ),
                 ),
                 GoRoute(
+                  path: 'visual-scan',
+                  builder: (context, state) => ListenableBuilder(
+                    listenable: _imageScanPermissionService,
+                    builder: (context, _) {
+                      if (!_imageScanPermissionService.loaded) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final launch = state.extra is VisualScanLaunchArgs
+                          ? state.extra! as VisualScanLaunchArgs
+                          : const VisualScanLaunchArgs();
+                      return VisualScanScreen(
+                        repository: _visualScanRepository,
+                        allowPhotoCapture:
+                            _imageScanPermissionService.imageScanEnabled,
+                        initialPhotos: launch.photos,
+                        autoAnalyze: launch.autoAnalyze,
+                        initialBarcode: launch.barcode,
+                      );
+                    },
+                  ),
+                ),
+                GoRoute(
+                  path: 'quote-photo',
+                  redirect: (context, state) => '/home/visual-scan',
+                ),
+                GoRoute(
+                  path: 'product-photo-search',
+                  redirect: (context, state) => '/home/visual-scan',
+                ),
+                GoRoute(
                   path: 'products',
                   builder: (context, state) => ProductsScreen(
                     productsRepository: _productsRepository,
                     cartRepository: _cartRepository,
+                    imageScanPermission: _imageScanPermissionService,
                   ),
                   routes: [
                     GoRoute(
@@ -148,6 +193,8 @@ class AppRouter {
   final LocalNotificationsService _notifications;
   final ProductsRepository _productsRepository;
   final CartRepository _cartRepository;
+  final VisualScanRepository _visualScanRepository;
+  final ImageScanPermissionService _imageScanPermissionService;
 
   late final GoRouter router;
 
@@ -163,3 +210,4 @@ class AppRouter {
     return 'Detalle';
   }
 }
+

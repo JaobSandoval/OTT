@@ -9,6 +9,7 @@ class ApiXlMovilSoapClient {
   ApiXlMovilSoapClient({Dio? dio}) : _dio = dio ?? createDebugDio();
 
   static const tempUri = 'http://tempuri.org/';
+  static const _tokenRetryDelay = Duration(milliseconds: 1500);
 
   final Dio _dio;
 
@@ -20,29 +21,24 @@ class ApiXlMovilSoapClient {
     required String password,
     required String bodyXml,
   }) async {
-    final token = BffRequestTokenManager.instance.getToken(idUsuario.toString());
-    final envelope = '''<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <$methodName xmlns="$tempUri">
-$bodyXml
-    </$methodName>
-  </soap:Body>
-</soap:Envelope>''';
+    final userId = idUsuario.toString();
+    final envelope = _buildEnvelope(methodName, bodyXml);
+    final tokenManager = BffRequestTokenManager.instance;
 
-    final res = await _dio.post<String>(
-      soapUrl,
-      data: envelope,
-      options: Options(
-        contentType: 'text/xml; charset=utf-8',
-        responseType: ResponseType.plain,
-        headers: {
-          'SOAPAction': 'http://tempuri.org/$methodName',
-          'X-Request-Token': token,
-        },
-        validateStatus: (status) => status != null && status < 600,
-      ),
+    var res = await _post(
+      methodName: methodName,
+      envelope: envelope,
+      token: tokenManager.getToken(userId),
     );
+
+    if (res.statusCode == 403 || res.statusCode == 401) {
+      await Future<void>.delayed(_tokenRetryDelay);
+      res = await _post(
+        methodName: methodName,
+        envelope: envelope,
+        token: tokenManager.refreshToken(userId),
+      );
+    }
 
     if (res.statusCode == 403 || res.statusCode == 401) {
       throw DioException(
@@ -58,6 +54,36 @@ $bodyXml
     }
 
     return res.data ?? '';
+  }
+
+  String _buildEnvelope(String methodName, String bodyXml) =>
+      '''<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <$methodName xmlns="$tempUri">
+$bodyXml
+    </$methodName>
+  </soap:Body>
+</soap:Envelope>''';
+
+  Future<Response<String>> _post({
+    required String methodName,
+    required String envelope,
+    required String token,
+  }) {
+    return _dio.post<String>(
+      soapUrl,
+      data: envelope,
+      options: Options(
+        contentType: 'text/xml; charset=utf-8',
+        responseType: ResponseType.plain,
+        headers: {
+          'SOAPAction': 'http://tempuri.org/$methodName',
+          'X-Request-Token': token,
+        },
+        validateStatus: (status) => status != null && status < 600,
+      ),
+    );
   }
 
   static String extractSoapResult(String xml, String resultTag) {

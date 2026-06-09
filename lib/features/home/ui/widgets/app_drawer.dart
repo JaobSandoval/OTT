@@ -8,7 +8,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 class AppDrawer extends StatelessWidget {
-  const AppDrawer({super.key, required this.auth});
+  const AppDrawer({
+    super.key,
+    required this.auth,
+  });
 
   final AuthController auth;
 
@@ -89,7 +92,7 @@ class AppDrawer extends StatelessWidget {
                         ],
                         const SizedBox(height: 8),
                         Text(
-                          'v1.0.10',
+                          'v1.0.12',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: Colors.white.withValues(alpha: 0.7),
                           ),

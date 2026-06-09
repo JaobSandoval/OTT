@@ -16,6 +16,10 @@ import 'package:exel_ott/features/otp/domain/otp_repository.dart';
 import 'package:exel_ott/core/theme/app_theme.dart';
 import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
+import 'package:exel_ott/features/product_photo_search/data/product_photo_search_repository.dart';
+import 'package:exel_ott/features/quote_from_photo/data/quote_from_photo_repository.dart';
+import 'package:exel_ott/features/visual_scan/data/visual_scan_repository.dart';
+import 'package:exel_ott/core/permissions/image_scan_permission_service.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,6 +40,10 @@ class _ExelOttAppState extends State<ExelOttApp> {
   late final OtpRepository _otpRepository;
   late final ProductsRepository _productsRepository;
   late final CartRepository _cartRepository;
+  late final QuoteFromPhotoRepository _quoteFromPhotoRepository;
+  late final ProductPhotoSearchRepository _productPhotoSearchRepository;
+  late final VisualScanRepository _visualScanRepository;
+  late final ImageScanPermissionService _imageScanPermissionService;
 
   late final AppRouter _appRouter;
 
@@ -62,6 +70,24 @@ class _ExelOttAppState extends State<ExelOttApp> {
       sessionStore: _sessionStore,
       productsRepository: _productsRepository,
     );
+    _quoteFromPhotoRepository = QuoteFromPhotoRepository(
+      sessionStore: _sessionStore,
+      productsRepository: _productsRepository,
+      cartRepository: _cartRepository,
+    );
+    _productPhotoSearchRepository = ProductPhotoSearchRepository(
+      sessionStore: _sessionStore,
+      productsRepository: _productsRepository,
+      cartRepository: _cartRepository,
+    );
+    _visualScanRepository = VisualScanRepository(
+      sessionStore: _sessionStore,
+      productPhotoSearchRepository: _productPhotoSearchRepository,
+      quoteFromPhotoRepository: _quoteFromPhotoRepository,
+    );
+    _imageScanPermissionService = ImageScanPermissionService(
+      sessionStore: _sessionStore,
+    );
 
     _authController = AuthController(
       sessionStore: _sessionStore,
@@ -74,9 +100,22 @@ class _ExelOttAppState extends State<ExelOttApp> {
       notifications: _notifications,
       productsRepository: _productsRepository,
       cartRepository: _cartRepository,
+      visualScanRepository: _visualScanRepository,
+      imageScanPermissionService: _imageScanPermissionService,
     );
 
+    _authController.addListener(_onAuthChanged);
     _bootstrap();
+  }
+
+  void _onAuthChanged() {
+    if (!_authController.isSignedIn) {
+      _imageScanPermissionService.reset();
+      return;
+    }
+    if (!_imageScanPermissionService.loaded) {
+      _imageScanPermissionService.refresh();
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -92,6 +131,9 @@ class _ExelOttAppState extends State<ExelOttApp> {
       localNotifications: _notifications,
     );
     await _authController.loadFromStorage();
+    if (_authController.isSignedIn) {
+      await _imageScanPermissionService.refresh();
+    }
     if (await _notifications.launchedFromOpenOtpTap()) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _appRouter.router.go('/home/otp');
@@ -102,6 +144,7 @@ class _ExelOttAppState extends State<ExelOttApp> {
 
   @override
   void dispose() {
+    _authController.removeListener(_onAuthChanged);
     _authController.dispose();
     super.dispose();
   }

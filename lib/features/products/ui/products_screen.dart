@@ -1,4 +1,5 @@
 import 'package:exel_ott/features/cart/data/cart_repository.dart';
+import 'package:exel_ott/core/permissions/image_scan_permission_service.dart';
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
@@ -9,17 +10,21 @@ import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/products/domain/product_search_filters.dart';
 import 'package:exel_ott/features/products/ui/widgets/product_card_tile.dart';
 import 'package:exel_ott/features/products/ui/widgets/products_filters_bar.dart';
+import 'package:exel_ott/features/visual_scan/ui/visual_scan_lens_sheet.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({
     super.key,
     required this.productsRepository,
     required this.cartRepository,
+    required this.imageScanPermission,
   });
 
   final ProductsRepository productsRepository;
   final CartRepository cartRepository;
+  final ImageScanPermissionService imageScanPermission;
 
   @override
   State<ProductsScreen> createState() => _ProductsScreenState();
@@ -34,16 +39,42 @@ class _ProductsScreenState extends State<ProductsScreen> {
   bool _loading = false;
   String? _error;
 
+  List<ProductCard> _newProducts = const [];
+  bool _loadingNewProducts = false;
+  String? _newProductsError;
+
   @override
   void initState() {
     super.initState();
     AppRuntimeEndpoints.instance.refreshRemoteConfig();
+    _loadNewProducts();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadNewProducts() async {
+    setState(() {
+      _loadingNewProducts = true;
+      _newProductsError = null;
+    });
+    try {
+      final list = await widget.productsRepository.fetchProductosNuevos();
+      if (!mounted) return;
+      setState(() {
+        _newProducts = list;
+        _loadingNewProducts = false;
+      });
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingNewProducts = false;
+        _newProductsError = friendlyErrorMessage(e);
+      });
+    }
   }
 
   Future<void> _runSearch() async {
@@ -102,6 +133,22 @@ class _ProductsScreenState extends State<ProductsScreen> {
     _onFiltersChanged(const ProductSearchFilters());
   }
 
+  Future<void> _openVisualLens() async {
+    if (!widget.imageScanPermission.loaded) {
+      await widget.imageScanPermission.refresh();
+    }
+    if (!mounted) return;
+
+    final allowPhoto = widget.imageScanPermission.imageScanEnabled;
+    final result = await VisualScanLensSheet.open(
+      context,
+      allowPhotoCapture: allowPhoto,
+    );
+    if (result == null || !mounted) return;
+
+    context.push('/home/visual-scan', extra: result);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -133,16 +180,29 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   Icons.search_rounded,
                   color: AppColors.textSecondary,
                 ),
-                suffixIcon: Container(
-                  margin: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    gradient: AppDecorations.brandGradient,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_forward_rounded, color: Colors.white),
-                    onPressed: _loading ? null : _runSearch,
-                  ),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Buscar con foto',
+                      onPressed: _openVisualLens,
+                      icon: Icon(
+                        Icons.photo_camera_outlined,
+                        color: AppColors.catalogAccent.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        gradient: AppDecorations.brandGradient,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                        onPressed: _loading ? null : _runSearch,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -157,7 +217,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
             ),
           ],
           const SizedBox(height: 12),
-          if (_loading) const LinearProgressIndicator(),
+          if (_loading || _loadingNewProducts) const LinearProgressIndicator(),
           if (_error != null) ...[
             const SizedBox(height: 8),
             Container(
@@ -186,10 +246,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           const SizedBox(height: 8),
           Expanded(
             child: isEmpty
-                ? _EmptyState(
-                    icon: Icons.search_rounded,
-                    message: 'Escribe un término y pulsa buscar.',
-                  )
+                ? _buildNewProductsBrowse(context, listBottomPad)
                 : noResults
                     ? _EmptyState(
                         icon: Icons.inventory_2_outlined,
@@ -213,6 +270,69 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildNewProductsBrowse(BuildContext context, double listBottomPad) {
+    final theme = Theme.of(context);
+
+    if (_newProductsError != null && _newProducts.isEmpty) {
+      return _EmptyState(
+        icon: Icons.new_releases_outlined,
+        message: _newProductsError!,
+      );
+    }
+
+    if (_newProducts.isEmpty && !_loadingNewProducts) {
+      return _EmptyState(
+        icon: Icons.search_rounded,
+        message: 'Escribe un término, usa la cámara para buscar con foto '
+            'o pulsa buscar.',
+      );
+    }
+
+    return ListView(
+      padding: EdgeInsets.only(bottom: listBottomPad),
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.new_releases_outlined,
+              size: 20,
+              color: AppColors.catalogAccent,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Productos nuevos',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Explora lo más reciente o busca arriba con texto o cámara.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 14),
+        ...List.generate(_newProducts.length, (index) {
+          final product = _newProducts[index];
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: index == _newProducts.length - 1 ? 0 : 14,
+            ),
+            child: ProductCardTile(
+              key: ValueKey('new-${product.idProducto}'),
+              product: product,
+              repository: widget.productsRepository,
+              cartRepository: widget.cartRepository,
+            ),
+          );
+        }),
+      ],
     );
   }
 }

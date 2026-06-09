@@ -1,4 +1,5 @@
 import 'package:exel_ott/core/auth/auth_controller.dart';
+import 'package:exel_ott/core/permissions/image_scan_permission_service.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
@@ -11,6 +12,7 @@ class AppShell extends StatelessWidget {
   const AppShell({
     super.key,
     required this.auth,
+    required this.imageScanPermission,
     required this.child,
     this.title = '',
     this.showAppBar = true,
@@ -20,6 +22,7 @@ class AppShell extends StatelessWidget {
   });
 
   final AuthController auth;
+  final ImageScanPermissionService imageScanPermission;
   final Widget child;
   final String title;
   final bool showAppBar;
@@ -62,7 +65,9 @@ class AppShell extends StatelessWidget {
               ],
             )
           : null,
-      drawer: AppDrawer(auth: auth),
+      drawer: AppDrawer(
+        auth: auth,
+      ),
       body: child,
       bottomNavigationBar: showNav
           ? AppFloatingNavBar(

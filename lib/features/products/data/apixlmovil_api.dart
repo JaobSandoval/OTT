@@ -1,5 +1,6 @@
 import 'package:exel_ott/core/debug/technical_log_store.dart';
 import 'package:exel_ott/features/products/data/apixlmovil_buscador_response_parser.dart';
+import 'package:exel_ott/features/products/data/apixlmovil_productos_nuevos_parser.dart';
 import 'package:exel_ott/features/products/data/apixlmovil_product_parsers.dart';
 import 'package:exel_ott/features/products/data/apixlmovil_soap_client.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
@@ -45,6 +46,36 @@ ${ApiXlMovilSoapClient.param('id_marca', idMarca)}''';
     TechnicalLogStore.instance.info(
       'PRODUCTS',
       'Buscador SOAP — respuesta',
+      fields: {'total': '${list.length}'},
+    );
+    return list;
+  }
+
+  Future<List<ProductCard>> listadoProductosNuevos({
+    required int idUsuario,
+    required String password,
+  }) async {
+    TechnicalLogStore.instance.info(
+      'PRODUCTS',
+      'ListadoProductosNuevos SOAP — solicitud',
+      fields: {'id_usuario': '$idUsuario'},
+    );
+
+    final body = '''
+${ApiXlMovilSoapClient.paramInt('id_usuario', idUsuario)}
+${ApiXlMovilSoapClient.param('Password', password)}''';
+
+    final xml = await _soap.invoke(
+      methodName: 'ListadoProductosNuevos',
+      idUsuario: idUsuario,
+      password: password,
+      bodyXml: body,
+    );
+
+    final list = ApiXlMovilProductosNuevosParser.parse(xml);
+    TechnicalLogStore.instance.info(
+      'PRODUCTS',
+      'ListadoProductosNuevos SOAP — respuesta',
       fields: {'total': '${list.length}'},
     );
     return list;

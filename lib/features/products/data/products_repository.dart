@@ -74,6 +74,14 @@ class ProductsRepository {
     );
   }
 
+  Future<List<ProductCard>> fetchProductosNuevos() async {
+    final creds = await _credentials();
+    return _api.listadoProductosNuevos(
+      idUsuario: creds.idUsuario,
+      password: creds.password,
+    );
+  }
+
   bool hasCachedExistencia(String idProducto) =>
       _existenciaLoaded.contains(idProducto);
 

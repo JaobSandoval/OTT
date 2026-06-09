@@ -41,6 +41,9 @@ class AppRuntimeEndpoints {
   String? _urlAltaDeCliente;
 
   String get exelInfoUsuarioUrl => _exelInfoUsuarioUrl;
+
+  /// Base del servicio AI.asmx (sin nombre de método), p. ej. `.../AI/AI.asmx`.
+  String get exelAiAsmxBaseUrl => normalizeExelAiAsmxBaseUrl(_exelInfoUsuarioUrl);
   String get apiBaseUrl => _apiBaseUrl;
   String get apiXlMovilAsmxUrl => _apiXlMovilAsmxUrl;
   String get loginRegistrarTokenSoapUrl => _loginRegistrarTokenSoapUrl;
@@ -229,6 +232,23 @@ class AppRuntimeEndpoints {
       }
     }
     return null;
+  }
+
+  /// Deriva la URL base de AI.asmx desde `exelInfoUsuarioUrl` u otra URL del mismo ASMX.
+  static String normalizeExelAiAsmxBaseUrl(String raw) {
+    var url = raw.trim();
+    if (url.isEmpty) return url;
+
+    final lower = url.toLowerCase();
+    final asmxIndex = lower.indexOf('.asmx');
+    if (asmxIndex >= 0) {
+      return url.substring(0, asmxIndex + 5);
+    }
+
+    if (!url.endsWith('/')) {
+      url = '$url/';
+    }
+    return '${url}AI.asmx';
   }
 
   /// Acepta URL base (`.../apiXLMovil/`) o ASMX completo (`.../APIXLMovil.asmx`).
