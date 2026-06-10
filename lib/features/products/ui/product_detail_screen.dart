@@ -1,27 +1,32 @@
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
+import 'package:exel_ott/core/utils/currency_format.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/products/domain/product_detail.dart';
+import 'package:exel_ott/features/products/ui/widgets/zoomable_product_image.dart';
 import 'package:flutter/material.dart';
 import 'package:exel_ott/features/products/ui/product_add_to_cart_helpers.dart';
+import 'package:go_router/go_router.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   const ProductDetailScreen({
     super.key,
     required this.idProducto,
     required this.repository,
-    required this.cartRepository,
+    this.cartRepository,
     this.initialProduct,
+    this.catalogOnly = false,
   });
 
   final String idProducto;
   final ProductsRepository repository;
-  final CartRepository cartRepository;
+  final CartRepository? cartRepository;
   final ProductCard? initialProduct;
+  final bool catalogOnly;
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -45,7 +50,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _error = null;
     });
     try {
-      final detail = await widget.repository.fetchDetail(widget.idProducto);
+      final detail = widget.catalogOnly
+          ? await widget.repository.fetchPublicDetail(
+              widget.idProducto,
+              card: widget.initialProduct,
+            )
+          : await widget.repository.fetchDetail(widget.idProducto);
       if (!mounted) return;
       setState(() {
         _detail = detail;
@@ -62,10 +72,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _onExistenciaTap(ExistenciaSucursal existencia) async {
     final detail = _detail;
-    if (detail == null || _addingToCart) return;
+    final cartRepository = widget.cartRepository;
+    if (detail == null || _addingToCart || widget.catalogOnly || cartRepository == null) {
+      return;
+    }
 
-    final idSucursal = await widget.cartRepository.readIdSucursalUsuario();
-    final pickable = widget.cartRepository.pickableLocations(detail, idSucursal);
+    final idSucursal = await cartRepository.readIdSucursalUsuario();
+    final pickable = cartRepository.pickableLocations(detail, idSucursal);
     if (pickable.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -120,7 +133,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     try {
       await addProductToCart(
         context: context,
-        cartRepository: widget.cartRepository,
+        cartRepository: cartRepository,
         idProducto: detail.idProducto,
         selected: selected,
       );
@@ -202,6 +215,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         loading: _loading,
                         addingToCart: _addingToCart,
                         onExistenciaTap: _onExistenciaTap,
+                        catalogOnly: widget.catalogOnly,
                       ),
                     ),
                   ],
@@ -218,6 +232,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   loading: _loading,
                   addingToCart: _addingToCart,
                   onExistenciaTap: _onExistenciaTap,
+                  catalogOnly: widget.catalogOnly,
                 ),
               ],
             ]),
@@ -263,7 +278,7 @@ class _SummaryColumn extends StatelessWidget {
         const SizedBox(height: 16),
         if (precio != null && precio.isNotEmpty)
           Text(
-            _formatPrecio(precio),
+            formatCurrency(precio),
             style: theme.textTheme.headlineSmall?.copyWith(
               color: AppColors.catalogAccent,
               fontWeight: FontWeight.w700,
@@ -282,11 +297,6 @@ class _SummaryColumn extends StatelessWidget {
     );
   }
 
-  String _formatPrecio(String raw) {
-    final value = double.tryParse(raw.replaceAll(',', ''));
-    if (value == null) return raw.startsWith('\$') ? raw : '\$$raw';
-    return '\$${value.toStringAsFixed(2)}';
-  }
 }
 
 class _ProductZoomGallery extends StatefulWidget {
@@ -346,9 +356,8 @@ class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
                 itemBuilder: (context, index) {
                   return Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Image.network(
-                      urls[index],
-                      fit: BoxFit.contain,
+                    child: ZoomableProductImage(
+                      url: urls[index],
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
                         return Center(
@@ -361,11 +370,6 @@ class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
                           ),
                         );
                       },
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.image_not_supported_outlined,
-                        size: 64,
-                        color: AppColors.textSecondary,
-                      ),
                     ),
                   );
                 },
@@ -412,12 +416,14 @@ class _InfoColumn extends StatelessWidget {
     required this.loading,
     required this.addingToCart,
     required this.onExistenciaTap,
+    this.catalogOnly = false,
   });
 
   final ProductDetail? detail;
   final bool loading;
   final bool addingToCart;
   final void Function(ExistenciaSucursal) onExistenciaTap;
+  final bool catalogOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -470,38 +476,61 @@ class _InfoColumn extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 20),
-        const AppSectionLabel(text: 'Existencia'),
-        const SizedBox(height: 12),
-        AppSoftCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (loading && existencias.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (existencias.isEmpty)
+        if (catalogOnly) ...[
+          const SizedBox(height: 20),
+          AppSoftCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
                 Text(
-                  'Sin información de existencias.',
+                  'Inicia sesión para ver precios, existencia y comprar.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: AppColors.textSecondary,
                   ),
-                )
-              else
-                ...existencias.map(
-                  (e) => _ExistenciaCard(
-                    existencia: e,
-                    canAdd: (parseStockQuantity(e.existencia) ?? 0) > 0,
-                    addingToCart: addingToCart,
-                    onTap: () => onExistenciaTap(e),
-                  ),
                 ),
-            ],
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () => context.go('/login'),
+                  child: const Text('Iniciar sesión'),
+                ),
+              ],
+            ),
           ),
-        ),
+        ] else ...[
+          const SizedBox(height: 20),
+          const AppSectionLabel(text: 'Existencia'),
+          const SizedBox(height: 12),
+          AppSoftCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (loading && existencias.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (existencias.isEmpty)
+                  Text(
+                    'Sin información de existencias.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  )
+                else
+                  ...existencias.map(
+                    (e) => _ExistenciaCard(
+                      existencia: e,
+                      canAdd: (parseStockQuantity(e.existencia) ?? 0) > 0,
+                      addingToCart: addingToCart,
+                      onTap: () => onExistenciaTap(e),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

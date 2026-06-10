@@ -4,6 +4,7 @@ import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
+import 'package:exel_ott/core/utils/currency_format.dart';
 import 'package:exel_ott/core/utils/external_url.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/product_photo_search/domain/product_identification_result.dart';
@@ -15,7 +16,6 @@ import 'package:exel_ott/features/visual_scan/domain/image_scan_classification.d
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 
 enum _ScanStep { capture, analyzing, searchResult, quoteReview, confirming, quoteSuccess }
 
@@ -864,7 +864,6 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
 
   Widget _buildQuoteReview(BuildContext context) {
     final theme = Theme.of(context);
-    final currency = NumberFormat.simpleCurrency(locale: 'es_MX');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -907,7 +906,7 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
         if (_estimatedTotal != null && _estimatedTotal! > 0) ...[
           const SizedBox(height: 12),
           Text(
-            'Total estimado: ${currency.format(_estimatedTotal)}',
+            'Total estimado: ${formatCurrency(_estimatedTotal)}',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
               color: AppColors.catalogAccent,

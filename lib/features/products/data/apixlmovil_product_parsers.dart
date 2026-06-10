@@ -86,6 +86,28 @@ class ApiXlMovilProductParsers {
     return (sucursal: sucursal, nacional: nacional);
   }
 
+  static ProductDetail parsePublicDetail({
+    required String idProducto,
+    required String fichaPayload,
+    ProductCard? card,
+  }) {
+    return ProductDetail(
+      idProducto: card?.idProducto.isNotEmpty == true
+          ? card!.idProducto
+          : idProducto,
+      descripcion: card?.descripcion ?? '',
+      marca: card?.marca ?? '',
+      precio: '',
+      codigoProveedor: '',
+      fichaTecnica: parseFichaTecnica(fichaPayload),
+      existencias: const [],
+      imagenesZoom: [
+        card?.imageUrl ??
+            'https://contenidos.exel.com.mx/imgProducto/$idProducto.png',
+      ],
+    );
+  }
+
   static ProductDetail parseDetail({
     required String idProducto,
     required String existenciaPayload,

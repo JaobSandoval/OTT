@@ -51,6 +51,77 @@ ${ApiXlMovilSoapClient.param('id_marca', idMarca)}''';
     return list;
   }
 
+  static const int _guestUserId = 0;
+  static const String _guestPassword = '';
+
+  Future<List<ProductCard>> buscadorPublico({
+    required String busqueda,
+    String idCategoria = '',
+    String idSubcategoria = '',
+    String idMarca = '',
+  }) async {
+    TechnicalLogStore.instance.info(
+      'PRODUCTS',
+      'BuscadorPublico SOAP — solicitud',
+      fields: {'busqueda': busqueda},
+    );
+
+    final body = '''
+${ApiXlMovilSoapClient.param('busqueda', busqueda)}
+${ApiXlMovilSoapClient.param('id_categoria', idCategoria)}
+${ApiXlMovilSoapClient.param('id_subcategoria', idSubcategoria)}
+${ApiXlMovilSoapClient.param('id_marca', idMarca)}''';
+
+    final xml = await _soap.invoke(
+      methodName: 'BuscadorPublico',
+      idUsuario: _guestUserId,
+      password: _guestPassword,
+      bodyXml: body,
+    );
+
+    final list = ApiXlMovilBuscadorResponseParser.parseWithResultTag(
+      xml,
+      'BuscadorPublicoResult',
+    );
+    TechnicalLogStore.instance.info(
+      'PRODUCTS',
+      'BuscadorPublico SOAP — respuesta',
+      fields: {'total': '${list.length}'},
+    );
+    return list;
+  }
+
+  Future<String> fichaTecnicaPublica({
+    required String idProducto,
+  }) async {
+    final body = '''
+${ApiXlMovilSoapClient.param('id_producto', idProducto)}''';
+
+    final xml = await _soap.invoke(
+      methodName: 'FichaTecnicaPublica',
+      idUsuario: _guestUserId,
+      password: _guestPassword,
+      bodyXml: body,
+    );
+
+    return ApiXlMovilSoapClient.extractSoapResult(
+      xml,
+      'FichaTecnicaPublicaResult',
+    );
+  }
+
+  Future<ProductDetail> loadPublicProductDetail({
+    required String idProducto,
+    ProductCard? card,
+  }) async {
+    final fichaPayload = await fichaTecnicaPublica(idProducto: idProducto);
+    return ApiXlMovilProductParsers.parsePublicDetail(
+      idProducto: idProducto,
+      fichaPayload: fichaPayload,
+      card: card,
+    );
+  }
+
   Future<List<ProductCard>> listadoProductosNuevos({
     required int idUsuario,
     required String password,

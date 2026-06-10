@@ -56,6 +56,33 @@ class ProductsRepository {
     return (idUsuario: idUsuario, password: creds.password);
   }
 
+  Future<List<ProductCard>> searchPublic(
+    String query, {
+    ProductSearchFilters filters = const ProductSearchFilters(),
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const [];
+
+    await AppRuntimeEndpoints.instance.refreshRemoteConfig();
+    return _api.buscadorPublico(
+      busqueda: trimmed,
+      idCategoria: filters.idCategoria,
+      idSubcategoria: filters.idSubcategoria,
+      idMarca: filters.idMarca,
+    );
+  }
+
+  Future<ProductDetail> fetchPublicDetail(
+    String idProducto, {
+    ProductCard? card,
+  }) async {
+    await AppRuntimeEndpoints.instance.refreshRemoteConfig();
+    return _api.loadPublicProductDetail(
+      idProducto: idProducto,
+      card: card,
+    );
+  }
+
   Future<List<ProductCard>> search(
     String query, {
     ProductSearchFilters filters = const ProductSearchFilters(),

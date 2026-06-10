@@ -8,6 +8,7 @@ import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/utils/external_url.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.auth});
@@ -250,6 +251,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => context.go('/catalog'),
+                        icon: const Icon(Icons.search_rounded),
+                        label: const Text('Explorar catálogo sin cuenta'),
                       ),
                       if (AppConfig.useExelAuth) ...[
                         const SizedBox(height: 16),

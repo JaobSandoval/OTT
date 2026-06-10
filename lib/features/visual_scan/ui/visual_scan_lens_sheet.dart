@@ -1,10 +1,17 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/visual_scan/domain/visual_scan_launch_args.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 /// Pantalla full-screen estilo Amazon Lens: cámara + galería + código/QR.
 class VisualScanLensSheet extends StatefulWidget {
@@ -40,12 +47,15 @@ class VisualScanLensSheet extends StatefulWidget {
 
 class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
   final _picker = ImagePicker();
+  final _previewKey = GlobalKey();
   late final MobileScannerController _scannerController;
   late bool _barcodeMode;
   bool _detected = false;
   bool _picking = false;
   String? _lastCode;
   String? _error;
+
+  void _log(String message) => debugPrint('[LensCapture] $message');
 
   @override
   void initState() {
@@ -57,6 +67,18 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
       facing: CameraFacing.back,
       torchEnabled: false,
     );
+    _log(
+      'initState allowPhoto=${widget.allowPhotoCapture} '
+      'barcodeMode=$_barcodeMode',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = _scannerController.value;
+      _log(
+        'scanner postFrame initialized=${state.isInitialized} '
+        'running=${state.isRunning} size=${state.size}',
+      );
+    });
   }
 
   @override
@@ -65,7 +87,7 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
     super.dispose();
   }
 
-  Future<void> _pickPhoto(ImageSource source) async {
+  Future<void> _pickPhotoFromGallery() async {
     if (_picking) return;
     setState(() {
       _picking = true;
@@ -73,7 +95,7 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
     });
     try {
       final file = await _picker.pickImage(
-        source: source,
+        source: ImageSource.gallery,
         maxWidth: 2400,
         maxHeight: 2400,
         imageQuality: 88,
@@ -88,6 +110,79 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
         );
       }
     } on Object catch (e) {
+      if (mounted) setState(() => _error = friendlyErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  Future<void> _capturePhoto() async {
+    if (_picking || _barcodeMode) {
+      _log('captura ignorada picking=$_picking barcodeMode=$_barcodeMode');
+      return;
+    }
+
+    final scannerState = _scannerController.value;
+    _log(
+      'botón pulsado — scanner initialized=${scannerState.isInitialized} '
+      'running=${scannerState.isRunning} size=${scannerState.size}',
+    );
+
+    setState(() {
+      _picking = true;
+      _error = null;
+    });
+
+    try {
+      final boundary = _previewKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) {
+        _log(
+          'ERROR: RepaintBoundary no listo '
+          '(context=${_previewKey.currentContext})',
+        );
+        throw StateError('La vista previa aún no está lista.');
+      }
+
+      _log('capturando vista previa…');
+      final image = await boundary.toImage(pixelRatio: 2.0);
+      _log('frame capturado ${image.width}x${image.height}');
+
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        _log('ERROR: toByteData devolvió null');
+        throw StateError('No se pudieron leer los bytes de la imagen.');
+      }
+
+      final pngBytes = byteData.buffer.asUint8List();
+      _log('PNG generado (${pngBytes.length} bytes), comprimiendo a JPEG…');
+
+      final jpgBytes = await FlutterImageCompress.compressWithList(
+        pngBytes,
+        quality: 88,
+        format: CompressFormat.jpeg,
+      );
+      final outputBytes = jpgBytes.isNotEmpty ? jpgBytes : pngBytes;
+      final ext = jpgBytes.isNotEmpty ? 'jpg' : 'png';
+      _log(
+        'listo para guardar (${outputBytes.length} bytes, formato=$ext)',
+      );
+
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/lens_${const Uuid().v4()}.$ext';
+      await File(path).writeAsBytes(outputBytes, flush: true);
+      _log('foto guardada en $path');
+
+      if (!mounted) return;
+      Navigator.of(context).pop(
+        VisualScanLaunchArgs(
+          photos: [path],
+          autoAnalyze: true,
+        ),
+      );
+    } on Object catch (e, stackTrace) {
+      _log('ERROR: $e');
+      _log('$stackTrace');
       if (mounted) setState(() => _error = friendlyErrorMessage(e));
     } finally {
       if (mounted) setState(() => _picking = false);
@@ -145,10 +240,13 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          MobileScanner(
-            key: ValueKey('scanner-$_barcodeMode'),
-            controller: _scannerController,
-            onDetect: _onDetect,
+          RepaintBoundary(
+            key: _previewKey,
+            child: MobileScanner(
+              key: ValueKey('scanner-$_barcodeMode'),
+              controller: _scannerController,
+              onDetect: _onDetect,
+            ),
           ),
 
           if (_barcodeMode)
@@ -348,10 +446,10 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
           _LensCircleButton(
             size: 52,
             icon: Icons.photo_library_outlined,
-            onTap: () => _pickPhoto(ImageSource.gallery),
+            onTap: _pickPhotoFromGallery,
           ),
           _LensShutterButton(
-            onTap: () => _pickPhoto(ImageSource.camera),
+            onTap: _capturePhoto,
           ),
           _LensCircleButton(
             size: 52,

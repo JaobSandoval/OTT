@@ -12,6 +12,7 @@ import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/products/ui/product_detail_screen.dart';
 import 'package:exel_ott/features/products/ui/products_screen.dart';
+import 'package:exel_ott/features/products/ui/public_catalog_screen.dart';
 import 'package:exel_ott/features/visual_scan/data/visual_scan_repository.dart';
 import 'package:exel_ott/features/visual_scan/domain/visual_scan_launch_args.dart';
 import 'package:exel_ott/features/visual_scan/ui/visual_scan_screen.dart';
@@ -47,9 +48,10 @@ class AppRouter {
         final path = state.uri.path;
         final isLoggingIn = path == '/login';
         final isWeb = path == '/web';
+        final isCatalog = path == '/catalog' || path.startsWith('/catalog/');
         final signedIn = _authController.isSignedIn;
         if (!signedIn) {
-          if (isLoggingIn || isWeb) return null;
+          if (isLoggingIn || isWeb || isCatalog) return null;
           return '/login';
         }
         if (signedIn && isLoggingIn) return '/home';
@@ -59,6 +61,35 @@ class AppRouter {
         GoRoute(
           path: '/login',
           builder: (context, state) => LoginScreen(auth: _authController),
+        ),
+        GoRoute(
+          path: '/catalog',
+          builder: (context, state) => PublicCatalogScreen(
+            productsRepository: _productsRepository,
+          ),
+          routes: [
+            GoRoute(
+              path: 'detail/:idProducto',
+              builder: (context, state) {
+                final initial = state.extra;
+                return Scaffold(
+                  appBar: AppBar(
+                    title: Text(
+                      initial is ProductCard && initial.descripcion.isNotEmpty
+                          ? initial.descripcion
+                          : state.pathParameters['idProducto'] ?? 'Detalle',
+                    ),
+                  ),
+                  body: ProductDetailScreen(
+                    idProducto: state.pathParameters['idProducto'] ?? '',
+                    repository: _productsRepository,
+                    initialProduct: initial is ProductCard ? initial : null,
+                    catalogOnly: true,
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         GoRoute(
           path: '/web',

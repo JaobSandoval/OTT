@@ -1,10 +1,12 @@
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
+import 'package:exel_ott/core/utils/currency_format.dart';
 import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/products/domain/product_detail.dart';
 import 'package:exel_ott/features/products/ui/product_add_to_cart_helpers.dart';
+import 'package:exel_ott/features/products/ui/widgets/zoomable_product_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -13,12 +15,16 @@ class ProductCardTile extends StatefulWidget {
     super.key,
     required this.product,
     required this.repository,
-    required this.cartRepository,
+    this.cartRepository,
+    this.catalogOnly = false,
+    this.onTap,
   });
 
   final ProductCard product;
   final ProductsRepository repository;
-  final CartRepository cartRepository;
+  final CartRepository? cartRepository;
+  final bool catalogOnly;
+  final VoidCallback? onTap;
 
   @override
   State<ProductCardTile> createState() => _ProductCardTileState();
@@ -35,6 +41,7 @@ class _ProductCardTileState extends State<ProductCardTile> {
   @override
   void initState() {
     super.initState();
+    if (widget.catalogOnly) return;
     _hydratePrecioFromCache();
     _hydrateExistenciaFromCache();
     if (_precio == null) _loadPrecio();
@@ -134,6 +141,10 @@ class _ProductCardTileState extends State<ProductCardTile> {
   }
 
   void _openDetail() {
+    if (widget.onTap != null) {
+      widget.onTap!();
+      return;
+    }
     context.push(
       '/home/products/detail/${widget.product.idProducto}',
       extra: widget.product,
@@ -141,15 +152,17 @@ class _ProductCardTileState extends State<ProductCardTile> {
   }
 
   Future<void> _onAddToCart() async {
-    if (_addingToCart) return;
+    if (_addingToCart || widget.catalogOnly) return;
+    final cartRepository = widget.cartRepository;
+    if (cartRepository == null) return;
 
     setState(() => _addingToCart = true);
     try {
       final detail =
           await widget.repository.fetchDetail(widget.product.idProducto);
-      final idSucursal = await widget.cartRepository.readIdSucursalUsuario();
+      final idSucursal = await cartRepository.readIdSucursalUsuario();
       final pickable =
-          widget.cartRepository.pickableLocations(detail, idSucursal);
+          cartRepository.pickableLocations(detail, idSucursal);
 
       if (pickable.isEmpty) {
         if (!mounted) return;
@@ -172,7 +185,7 @@ class _ProductCardTileState extends State<ProductCardTile> {
       if (!mounted) return;
       await addProductToCart(
         context: context,
-        cartRepository: widget.cartRepository,
+        cartRepository: cartRepository,
         idProducto: detail.idProducto,
         selected: quick,
       );
@@ -222,10 +235,8 @@ class _ProductCardTileState extends State<ProductCardTile> {
                               color: AppColors.cardWhite,
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
-                                child: Image.network(
-                                  widget.product.imageUrl,
-                                  fit: BoxFit.contain,
-                                  filterQuality: FilterQuality.medium,
+                                child: ZoomableProductImage(
+                                  url: widget.product.imageUrl,
                                   loadingBuilder:
                                       (context, child, loadingProgress) {
                                     if (loadingProgress == null) return child;
@@ -244,12 +255,6 @@ class _ProductCardTileState extends State<ProductCardTile> {
                                       ),
                                     );
                                   },
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Icon(
-                                    Icons.inventory_2_outlined,
-                                    size: 40,
-                                    color: AppColors.textSecondary,
-                                  ),
                                 ),
                               ),
                             ),
@@ -296,72 +301,75 @@ class _ProductCardTileState extends State<ProductCardTile> {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: _buildPrecio(theme)),
-                      Material(
-                        color: AppColors.catalogAccent.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        child: InkWell(
-                          onTap: _addingToCart ? null : _onAddToCart,
+            if (!widget.catalogOnly)
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: _buildPrecio(theme)),
+                        Material(
+                          color: AppColors.catalogAccent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
-                          child: SizedBox(
-                            width: 36,
-                            height: 36,
-                            child: _addingToCart
-                                ? Padding(
-                                    padding: const EdgeInsets.all(8),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                          child: InkWell(
+                            onTap: _addingToCart ? null : _onAddToCart,
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: _addingToCart
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.catalogAccent,
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.add_shopping_cart_outlined,
+                                      size: 20,
                                       color: AppColors.catalogAccent,
                                     ),
-                                  )
-                                : Icon(
-                                    Icons.add_shopping_cart_outlined,
-                                    size: 20,
-                                    color: AppColors.catalogAccent,
-                                  ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _StockChip(
-                        label: 'Sucursal',
-                        value: productStockLabel(
-                          _sucursalStock,
-                          pending: _sucursalPending,
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _StockChip(
+                          label: 'Sucursal',
+                          value: productStockLabel(
+                            _sucursalStock,
+                            pending: _sucursalPending,
+                          ),
+                          color: AppColors.catalogAccent,
+                          isBackorder: !_sucursalPending &&
+                              !productHasStock(_sucursalStock),
+                          isPending: _sucursalPending,
                         ),
-                        color: AppColors.catalogAccent,
-                        isBackorder: !_sucursalPending &&
-                            !productHasStock(_sucursalStock),
-                        isPending: _sucursalPending,
-                      ),
-                      _StockChip(
-                        label: 'Nacional',
-                        value: productStockLabel(
-                          widget.product.existenciaNacional,
+                        _StockChip(
+                          label: 'Nacional',
+                          value: productStockLabel(
+                            widget.product.existenciaNacional,
+                          ),
+                          color: AppColors.catalogAccentAlt,
+                          isBackorder: !productHasStock(
+                            widget.product.existenciaNacional,
+                          ),
                         ),
-                        color: AppColors.catalogAccentAlt,
-                        isBackorder: !productHasStock(
-                          widget.product.existenciaNacional,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+                      ],
+                    ),
+                  ],
+                ),
+              )
+            else
+              const SizedBox(height: 14),
           ],
         ),
       ),
@@ -381,7 +389,7 @@ class _ProductCardTileState extends State<ProductCardTile> {
     }
     if (_precio != null && _precio!.isNotEmpty) {
       return Text(
-        _formatPrecio(_precio!),
+        formatCurrency(_precio!),
         style: theme.textTheme.titleMedium?.copyWith(
           color: AppColors.catalogAccent,
           fontWeight: FontWeight.w800,
@@ -396,11 +404,6 @@ class _ProductCardTileState extends State<ProductCardTile> {
     );
   }
 
-  String _formatPrecio(String raw) {
-    final value = double.tryParse(raw.replaceAll(',', ''));
-    if (value == null) return raw.startsWith('\$') ? raw : '\$$raw';
-    return '\$${value.toStringAsFixed(2)}';
-  }
 }
 
 class _Chip extends StatelessWidget {

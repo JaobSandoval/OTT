@@ -7,7 +7,7 @@ import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/features/cart/domain/cart_item.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:exel_ott/core/utils/currency_format.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key, required this.repository});
@@ -23,8 +23,6 @@ class _CartScreenState extends State<CartScreen> {
   bool _loading = true;
   String? _error;
   final Set<String> _updatingKeys = {};
-
-  static final _currency = NumberFormat.currency(locale: 'es_MX', symbol: '\$');
 
   String _itemKey(CartItem item) => '${item.idProducto}|${item.idLocalidad}';
 
@@ -205,7 +203,7 @@ class _CartScreenState extends State<CartScreen> {
                         onIncrease: () => _adjustQuantity(item, 1),
                         onDecrease: () => _adjustQuantity(item, -1),
                         onRemove: () => _removeItem(item),
-                        formatPrice: _currency.format,
+                        formatPrice: formatCurrency,
                       );
                     },
                   ),
