@@ -1,5 +1,6 @@
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
 import 'package:exel_ott/features/cart/data/cart_api.dart';
 import 'package:exel_ott/features/cart/domain/cart_item.dart';
 import 'package:exel_ott/features/cart/domain/cart_operation_result.dart';
@@ -82,13 +83,20 @@ class CartRepository {
     }
 
     final creds = await _credentials();
-    return _api.agregarProducto(
+    final result = await _api.agregarProducto(
       idUsuario: creds.idUsuario,
       password: creds.password,
       idProducto: idProducto,
       cantidad: cantidad,
       idLocalidad: idLocalidad,
     );
+    if (result.ok) {
+      await FirebaseMonitoringService.instance.logAddToCart(
+        itemId: idProducto,
+        quantity: cantidad,
+      );
+    }
+    return result;
   }
 
   Future<List<CartItem>> consultaCarrito() async {

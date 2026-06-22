@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:exel_ott/core/config/app_config.dart';
 import 'package:exel_ott/core/debug/technical_log_store.dart';
+import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
 import 'package:exel_ott/core/network/debug_dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -39,6 +40,8 @@ class AppRuntimeEndpoints {
   String? _urlAppStore;
   String? _urlHazOlvidadoTuContrasena;
   String? _urlAltaDeCliente;
+  bool _enMantenimiento = false;
+  String? _mensajeEnMantenimiento;
 
   String get exelInfoUsuarioUrl => _exelInfoUsuarioUrl;
 
@@ -57,6 +60,8 @@ class AppRuntimeEndpoints {
       _urlHazOlvidadoTuContrasena ?? AppConfig.defaultUrlHazOlvidadoTuContrasena;
   String get urlAltaDeCliente =>
       _urlAltaDeCliente ?? AppConfig.defaultUrlAltaDeCliente;
+  bool get enMantenimiento => _enMantenimiento;
+  String? get mensajeEnMantenimiento => _mensajeEnMantenimiento;
 
   /// Tienda según plataforma (Android → Play, iOS → App Store).
   String get storeUpdateUrl {
@@ -124,6 +129,10 @@ class AppRuntimeEndpoints {
         'Config local no disponible',
         error: e.toString(),
       );
+      await FirebaseMonitoringService.instance.logConfigLoadFailed(
+        source: 'local',
+        reason: e.toString(),
+      );
     }
   }
 
@@ -144,6 +153,10 @@ class AppRuntimeEndpoints {
           'CONFIG',
           'Config remota: respuesta no es JSON',
         );
+        await FirebaseMonitoringService.instance.logConfigLoadFailed(
+          source: 'remote',
+          reason: 'invalid_json',
+        );
         return;
       }
       _merge(map);
@@ -163,6 +176,10 @@ class AppRuntimeEndpoints {
         'Config remota no disponible',
         fields: {'url': AppConfig.configuracionRemotaUrl},
         error: e.toString(),
+      );
+      await FirebaseMonitoringService.instance.logConfigLoadFailed(
+        source: 'remote',
+        reason: e.toString(),
       );
     }
   }
@@ -221,6 +238,18 @@ class AppRuntimeEndpoints {
     _urlAltaDeCliente =
         _pickString(map, const ['urlAltaDeCliente', 'UrlAltaDeCliente']) ??
             _urlAltaDeCliente;
+
+    final mantenimiento = _pickBoolFlag(map, const [
+      'enMantenimiento',
+      'EnMantenimiento',
+    ]);
+    if (mantenimiento != null) _enMantenimiento = mantenimiento;
+
+    _mensajeEnMantenimiento = _pickString(map, const [
+          'mensajeEnMantenimiento',
+          'MensajeEnMantenimiento',
+        ]) ??
+        _mensajeEnMantenimiento;
   }
 
   String? _pickString(Map<String, dynamic> map, List<String> keys) {
@@ -229,6 +258,22 @@ class AppRuntimeEndpoints {
       if (v is String) {
         final t = v.trim();
         if (t.isNotEmpty) return t;
+      }
+    }
+    return null;
+  }
+
+  bool? _pickBoolFlag(Map<String, dynamic> map, List<String> keys) {
+    for (final k in keys) {
+      final v = map[k];
+      if (v == null) continue;
+      if (v is bool) return v;
+      if (v is int) return v != 0;
+      if (v is String) {
+        final t = v.trim().toLowerCase();
+        if (t.isEmpty) continue;
+        if (t == '1' || t == 'true' || t == 'si' || t == 'sí') return true;
+        if (t == '0' || t == 'false' || t == 'no') return false;
       }
     }
     return null;

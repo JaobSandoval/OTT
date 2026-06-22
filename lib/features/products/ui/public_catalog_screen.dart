@@ -4,18 +4,23 @@ import 'package:exel_ott/core/theme/app_widgets.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
+import 'package:exel_ott/features/products/domain/product_search_filters.dart';
+import 'package:exel_ott/features/products/domain/product_search_launch.dart';
 import 'package:exel_ott/features/products/ui/widgets/product_card_tile.dart';
+import 'package:exel_ott/features/products/ui/widgets/products_filters_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-/// Catálogo público sin sesión: solo búsqueda y ficha técnica.
+/// Catálogo público sin sesión: búsqueda, filtros por API y ficha técnica.
 class PublicCatalogScreen extends StatefulWidget {
   const PublicCatalogScreen({
     super.key,
     required this.productsRepository,
+    this.initialLaunch,
   });
 
   final ProductsRepository productsRepository;
+  final ProductSearchLaunch? initialLaunch;
 
   @override
   State<PublicCatalogScreen> createState() => _PublicCatalogScreenState();
@@ -23,10 +28,28 @@ class PublicCatalogScreen extends StatefulWidget {
 
 class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
   final _searchController = TextEditingController();
+  List<ProductCard> _catalogProducts = const [];
   List<ProductCard> _products = const [];
+  ProductSearchFilters _filters = const ProductSearchFilters();
   String _activeQuery = '';
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final launch = widget.initialLaunch;
+    if (launch != null && launch.shouldSearch) {
+      final q = launch.query?.trim();
+      if (q != null && q.isNotEmpty) {
+        _searchController.text = q;
+      }
+      _filters = launch.filters;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _runSearch();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -36,25 +59,34 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
 
   Future<void> _runSearch() async {
     final query = _searchController.text.trim();
-    if (query.isEmpty) {
+    if (query.isEmpty && !_filters.hasAny) {
       setState(() {
         _activeQuery = '';
+        _catalogProducts = const [];
         _products = const [];
         _error = null;
       });
       return;
     }
 
+    final apiQuery = query.isNotEmpty ? query : '%';
+
     setState(() {
       _loading = true;
       _error = null;
-      _activeQuery = query;
+      _activeQuery = query.isNotEmpty ? query : _filtersLabel();
+      _catalogProducts = const [];
+      _products = const [];
     });
 
     try {
-      final list = await widget.productsRepository.searchPublic(query);
+      final list = await widget.productsRepository.searchPublic(
+        apiQuery,
+        filters: _filters,
+      );
       if (!mounted) return;
       setState(() {
+        _catalogProducts = list;
         _products = list;
         _loading = false;
       });
@@ -65,6 +97,25 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
         _error = friendlyErrorMessage(e);
       });
     }
+  }
+
+  void _onFiltersChanged(ProductSearchFilters filters) {
+    setState(() => _filters = filters);
+    _runSearch();
+  }
+
+  void _clearFilters() {
+    setState(() => _filters = const ProductSearchFilters());
+    _runSearch();
+  }
+
+  String _filtersLabel() {
+    final parts = <String>[];
+    if (_filters.idMarca.isNotEmpty) parts.add('marca');
+    if (_filters.idCategoria.isNotEmpty) parts.add('categoría');
+    if (_filters.idSubcategoria.isNotEmpty) parts.add('subcategoría');
+    if (parts.isEmpty) return '';
+    return 'Filtro: ${parts.join(', ')}';
   }
 
   void _openDetail(ProductCard product) {
@@ -79,6 +130,9 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
     final theme = Theme.of(context);
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final filterOptions =
+        buildContextualFilterOptions(_catalogProducts, _filters);
+    final hasSearch = _searchController.text.trim().isNotEmpty || _filters.hasAny;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -97,7 +151,7 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
                   children: [
                     IconButton(
                       tooltip: 'Volver',
-                      onPressed: () => context.go('/login'),
+                      onPressed: () => context.go('/welcome'),
                       icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
                     ),
                     Expanded(
@@ -143,8 +197,18 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
               ],
             ),
           ),
+          if (_catalogProducts.isNotEmpty || _filters.hasAny)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: ProductsFiltersBar(
+                options: filterOptions,
+                filters: _filters,
+                onChanged: _onFiltersChanged,
+                onClear: _clearFilters,
+              ),
+            ),
           Expanded(
-            child: _buildBody(theme),
+            child: _buildBody(theme, hasSearch),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 12),
@@ -158,7 +222,7 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
     );
   }
 
-  Widget _buildBody(ThemeData theme) {
+  Widget _buildBody(ThemeData theme, bool hasSearch) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -179,7 +243,7 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
       );
     }
 
-    if (_activeQuery.isEmpty) {
+    if (!hasSearch && _activeQuery.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -218,7 +282,9 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Text(
-            'Sin resultados para "$_activeQuery".',
+            _activeQuery.isNotEmpty
+                ? 'Sin resultados para "$_activeQuery".'
+                : 'Sin resultados con los filtros seleccionados.',
             style: theme.textTheme.bodyLarge?.copyWith(
               color: AppColors.textSecondary,
             ),

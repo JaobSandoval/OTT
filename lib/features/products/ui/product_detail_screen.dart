@@ -1,3 +1,4 @@
+import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
@@ -61,6 +62,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _detail = detail;
         _loading = false;
       });
+      await FirebaseMonitoringService.instance.logViewItem(
+        itemId: detail.idProducto,
+        itemName: detail.descripcion.isNotEmpty
+            ? detail.descripcion
+            : detail.marca,
+      );
     } on Object catch (e) {
       if (!mounted) return;
       setState(() {
@@ -309,29 +316,18 @@ class _ProductZoomGallery extends StatefulWidget {
 }
 
 class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
-  late final PageController _controller;
-  int _index = 0;
+  late final PageController _pageController;
+  int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
-    _controller = PageController();
-  }
-
-  @override
-  void didUpdateWidget(covariant _ProductZoomGallery oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.urls != widget.urls) {
-      _index = 0;
-      if (_controller.hasClients) {
-        _controller.jumpToPage(0);
-      }
-    }
+    _pageController = PageController();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -340,72 +336,76 @@ class _ProductZoomGalleryState extends State<_ProductZoomGallery> {
     final theme = Theme.of(context);
     final urls = widget.urls;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          decoration: AppDecorations.softCard(radius: AppDecorations.radiusLg),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppDecorations.radiusLg),
-            child: SizedBox(
-              height: 260,
+    return Container(
+      decoration: AppDecorations.softCard(radius: AppDecorations.radiusLg),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppDecorations.radiusLg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
               child: PageView.builder(
-                controller: _controller,
+                controller: _pageController,
                 itemCount: urls.length,
-                onPageChanged: (i) => setState(() => _index = i),
+                onPageChanged: (index) => setState(() => _currentPage = index),
                 itemBuilder: (context, index) {
                   return Padding(
                     padding: const EdgeInsets.all(16),
-                    child: ZoomableProductImage(
-                      url: urls[index],
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.catalogAccent,
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                          ),
-                        );
-                      },
+                    child: Center(
+                      child: ZoomableProductImage(
+                        url: urls[index],
+                        galleryUrls: urls,
+                        galleryIndex: index,
+                        fit: BoxFit.contain,
+                        highQuality: true,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.catalogAccent,
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   );
                 },
               ),
             ),
-          ),
-        ),
-        if (urls.length > 1) ...[
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(urls.length, (i) {
-              final selected = i == _index;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: selected ? 8 : 6,
-                height: selected ? 8 : 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: selected
-                      ? AppColors.catalogAccent
-                      : AppColors.borderLight,
+            if (urls.length > 1) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(urls.length, (index) {
+                  final active = index == _currentPage;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: active ? 10 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: active
+                          ? AppColors.catalogAccent
+                          : AppColors.textSecondary.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  );
+                }),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 12),
+                child: Text(
+                  '${_currentPage + 1} / ${urls.length}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              );
-            }),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${_index + 1} / ${urls.length}',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -430,54 +430,44 @@ class _InfoColumn extends StatelessWidget {
     final theme = Theme.of(context);
     final ficha = detail?.fichaTecnica ?? const [];
     final existencias = detail?.existencias ?? const [];
+    final showFicha = ficha.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const AppSectionLabel(text: 'Información del producto'),
-        const SizedBox(height: 12),
-        AppSoftCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    size: 20,
-                    color: AppColors.catalogAccent,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Detalles del producto',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+        if (showFicha) ...[
+          const AppSectionLabel(text: 'Información del producto'),
+          const SizedBox(height: 12),
+          AppSoftCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 20,
+                      color: AppColors.catalogAccent,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (loading && ficha.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (ficha.isEmpty)
-                Text(
-                  'Sin ficha técnica disponible.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                )
-              else
+                    const SizedBox(width: 8),
+                    Text(
+                      'Detalles del producto',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 _FichaTable(rows: ficha),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
         if (catalogOnly) ...[
-          const SizedBox(height: 20),
+          if (showFicha) const SizedBox(height: 20),
           AppSoftCard(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -498,7 +488,7 @@ class _InfoColumn extends StatelessWidget {
             ),
           ),
         ] else ...[
-          const SizedBox(height: 20),
+          if (showFicha) const SizedBox(height: 20),
           const AppSectionLabel(text: 'Existencia'),
           const SizedBox(height: 12),
           AppSoftCard(

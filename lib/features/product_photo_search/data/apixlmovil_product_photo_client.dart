@@ -15,7 +15,7 @@ class ApiXlMovilProductPhotoClient {
 
   /// [images] lista de 1-3 entradas {base64, contentType}.
   /// La imagen en índice 0 es obligatoria (frontal/principal).
-  Future<ProductIdentificationResult> identificar({
+  Future<PhotoIdentificationResponse> identificar({
     required int idUsuario,
     required String password,
     required List<({String base64, String contentType})> images,
@@ -61,6 +61,6 @@ class ApiXlMovilProductPhotoClient {
       throw Exception(decoded['mensaje']?.toString() ?? 'Error al identificar el producto.');
     }
 
-    return ProductIdentificationResult.fromJson(decoded);
+    return PhotoIdentificationResponse.fromJson(decoded);
   }
 }

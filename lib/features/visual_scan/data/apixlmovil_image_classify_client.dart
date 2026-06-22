@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:developer' as dev;
 
 import 'package:exel_ott/features/products/data/apixlmovil_soap_client.dart';
 import 'package:exel_ott/features/visual_scan/domain/image_scan_classification.dart';
+import 'package:flutter/foundation.dart';
 
 /// Cliente SOAP para ClasificarTipoImagenEscaneo en APIXLMovil.asmx.
 class ApiXlMovilImageClassifyClient {
@@ -39,6 +41,20 @@ class ApiXlMovilImageClassifyClient {
     );
 
     final decoded = jsonDecode(jsonResult) as Map<String, dynamic>;
+    if (kDebugMode) {
+      dev.log(
+        const JsonEncoder.withIndent('  ').convert(decoded),
+        name: 'API.ClasificarTipoImagenEscaneo',
+      );
+      final debugOpenAi = decoded['debug_openai'];
+      if (debugOpenAi != null) {
+        dev.log(
+          const JsonEncoder.withIndent('  ').convert(debugOpenAi),
+          name: 'OpenAI.ClasificarTipoImagenEscaneo',
+        );
+      }
+    }
+
     final status = (decoded['status'] as String?)?.toLowerCase();
     if (status == 'error') {
       throw Exception(

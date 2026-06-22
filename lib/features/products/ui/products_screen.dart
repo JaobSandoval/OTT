@@ -8,6 +8,7 @@ import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/products/domain/product_search_filters.dart';
+import 'package:exel_ott/features/products/domain/product_search_launch.dart';
 import 'package:exel_ott/features/products/ui/widgets/product_card_tile.dart';
 import 'package:exel_ott/features/products/ui/widgets/products_filters_bar.dart';
 import 'package:exel_ott/features/visual_scan/ui/visual_scan_lens_sheet.dart';
@@ -20,11 +21,13 @@ class ProductsScreen extends StatefulWidget {
     required this.productsRepository,
     required this.cartRepository,
     required this.imageScanPermission,
+    this.initialLaunch,
   });
 
   final ProductsRepository productsRepository;
   final CartRepository cartRepository;
   final ImageScanPermissionService imageScanPermission;
+  final ProductSearchLaunch? initialLaunch;
 
   @override
   State<ProductsScreen> createState() => _ProductsScreenState();
@@ -47,7 +50,19 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void initState() {
     super.initState();
     AppRuntimeEndpoints.instance.refreshRemoteConfig();
-    _loadNewProducts();
+    final launch = widget.initialLaunch;
+    if (launch != null && launch.shouldSearch) {
+      final q = launch.query?.trim();
+      if (q != null && q.isNotEmpty) {
+        _searchController.text = q;
+      }
+      _filters = launch.filters;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _runSearch(applyInitialFilters: launch.filters.hasAny);
+      });
+    } else {
+      _loadNewProducts();
+    }
   }
 
   @override
@@ -64,6 +79,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
     try {
       final list = await widget.productsRepository.fetchProductosNuevos();
       if (!mounted) return;
+      await widget.productsRepository.prepareProductExtrasList(list);
+      if (!mounted) return;
       setState(() {
         _newProducts = list;
         _loadingNewProducts = false;
@@ -77,9 +94,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
   }
 
-  Future<void> _runSearch() async {
+  Future<void> _runSearch({bool applyInitialFilters = false}) async {
     final query = _searchController.text.trim();
-    if (query.isEmpty) {
+    final pendingFilters = applyInitialFilters ? _filters : const ProductSearchFilters();
+    final hasFilters = applyInitialFilters ? pendingFilters.hasAny : _filters.hasAny;
+
+    if (query.isEmpty && !hasFilters) {
       setState(() {
         _catalogProducts = const [];
         _products = const [];
@@ -91,23 +111,42 @@ class _ProductsScreenState extends State<ProductsScreen> {
       return;
     }
 
+    final apiQuery = query.isNotEmpty ? query : '%';
+
     widget.productsRepository.clearPrecioCache();
     setState(() {
       _loading = true;
       _error = null;
       _catalogProducts = const [];
       _products = const [];
-      _activeQuery = query;
-      _filters = const ProductSearchFilters();
+      _activeQuery = query.isNotEmpty ? query : 'Filtros activos';
+      if (!applyInitialFilters) {
+        _filters = const ProductSearchFilters();
+      }
     });
 
     try {
-      final results = await widget.productsRepository.search(query);
+      final apiFilters =
+          applyInitialFilters ? pendingFilters : const ProductSearchFilters();
+      final results = await widget.productsRepository.search(
+        apiQuery,
+        filters: apiFilters,
+      );
       if (!mounted) return;
+      await widget.productsRepository.prepareProductExtrasList(results);
+      if (!mounted) return;
+
+      final filters = applyInitialFilters
+          ? sanitizeFilters(results, pendingFilters)
+          : const ProductSearchFilters();
+      final filtered = applyInitialFilters
+          ? applyProductFilters(results, filters)
+          : results;
 
       setState(() {
         _catalogProducts = results;
-        _products = results;
+        _filters = filters;
+        _products = filtered;
         _loading = false;
       });
     } on Object catch (e) {
@@ -123,9 +162,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   void _onFiltersChanged(ProductSearchFilters filters) {
     final sanitized = sanitizeFilters(_catalogProducts, filters);
+    final filtered = applyProductFilters(_catalogProducts, sanitized);
+    widget.productsRepository.prepareProductExtrasList(filtered);
     setState(() {
       _filters = sanitized;
-      _products = applyProductFilters(_catalogProducts, _filters);
+      _products = filtered;
     });
   }
 
@@ -262,6 +303,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           return ProductCardTile(
                             key: ValueKey(product.idProducto),
                             product: product,
+                            listIndex: index,
                             repository: widget.productsRepository,
                             cartRepository: widget.cartRepository,
                           );
@@ -291,48 +333,47 @@ class _ProductsScreenState extends State<ProductsScreen> {
       );
     }
 
-    return ListView(
+    return ListView.separated(
       padding: EdgeInsets.only(bottom: listBottomPad),
-      children: [
-        Row(
-          children: [
-            Icon(
-              Icons.new_releases_outlined,
-              size: 20,
-              color: AppColors.catalogAccent,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Productos nuevos',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
+      itemCount: _newProducts.length + 2,
+      separatorBuilder: (context, index) => const SizedBox(height: 14),
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Row(
+            children: [
+              Icon(
+                Icons.new_releases_outlined,
+                size: 20,
+                color: AppColors.catalogAccent,
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Explora lo más reciente o busca arriba con texto o cámara.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 14),
-        ...List.generate(_newProducts.length, (index) {
-          final product = _newProducts[index];
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: index == _newProducts.length - 1 ? 0 : 14,
-            ),
-            child: ProductCardTile(
-              key: ValueKey('new-${product.idProducto}'),
-              product: product,
-              repository: widget.productsRepository,
-              cartRepository: widget.cartRepository,
+              const SizedBox(width: 8),
+              Text(
+                'Productos nuevos',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          );
+        }
+        if (index == 1) {
+          return Text(
+            'Explora lo más reciente o busca arriba con texto o cámara.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
             ),
           );
-        }),
-      ],
+        }
+        final productIndex = index - 2;
+        final product = _newProducts[productIndex];
+        return ProductCardTile(
+          key: ValueKey('new-${product.idProducto}'),
+          product: product,
+          listIndex: productIndex,
+          repository: widget.productsRepository,
+          cartRepository: widget.cartRepository,
+        );
+      },
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -30,7 +32,8 @@ class BarcodeScannerSheet extends StatefulWidget {
   State<BarcodeScannerSheet> createState() => _BarcodeScannerSheetState();
 }
 
-class _BarcodeScannerSheetState extends State<BarcodeScannerSheet> {
+class _BarcodeScannerSheetState extends State<BarcodeScannerSheet>
+    with WidgetsBindingObserver {
   late final MobileScannerController _controller;
   bool _detected = false;
   String? _lastCode;
@@ -38,17 +41,39 @@ class _BarcodeScannerSheetState extends State<BarcodeScannerSheet> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = MobileScannerController(
+      autoStart: false,
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
       torchEnabled: false,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_controller.start());
+    });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_controller.dispose());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_controller.value.hasCameraPermission) return;
+
+    switch (state) {
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        return;
+      case AppLifecycleState.resumed:
+        unawaited(_controller.start());
+      case AppLifecycleState.inactive:
+        unawaited(_controller.stop());
+    }
   }
 
   void _onDetect(BarcodeCapture capture) {
@@ -114,6 +139,12 @@ class _BarcodeScannerSheetState extends State<BarcodeScannerSheet> {
                   child: MobileScanner(
                     controller: _controller,
                     onDetect: _onDetect,
+                    errorBuilder: (context, error, child) {
+                      return _ScannerCameraError(
+                        error: error,
+                        onRetry: () => unawaited(_controller.start()),
+                      );
+                    },
                   ),
                 ),
 
@@ -264,6 +295,63 @@ class _OverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_OverlayPainter old) => old.detected != detected;
+}
+
+// ── Error de cámara / permisos ────────────────────────────────────────────────
+
+class _ScannerCameraError extends StatelessWidget {
+  const _ScannerCameraError({
+    required this.error,
+    required this.onRetry,
+  });
+
+  final MobileScannerException error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final denied =
+        error.errorCode == MobileScannerErrorCode.permissionDenied;
+    final message = denied
+        ? 'Permite el acceso a la cámara en Ajustes para escanear códigos.'
+        : 'No se pudo abrir la cámara.';
+
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                denied ? Icons.no_photography : Icons.error_outline,
+                color: Colors.white70,
+                size: 40,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              if (!denied) ...[
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white30),
+                  ),
+                  onPressed: onRetry,
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Botón linterna ────────────────────────────────────────────────────────────

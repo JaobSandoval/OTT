@@ -1,15 +1,19 @@
 import 'package:exel_ott/core/auth/auth_controller.dart';
+import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:exel_ott/core/permissions/image_scan_permission_service.dart';
 import 'package:exel_ott/core/notifications/local_notifications_service.dart';
 import 'package:exel_ott/features/auth/ui/login_screen.dart';
 import 'package:exel_ott/core/ui/in_app_webview_screen.dart';
 import 'package:exel_ott/features/home/ui/home_shell.dart';
+import 'package:exel_ott/features/welcome/ui/welcome_screen.dart';
 import 'package:exel_ott/features/otp/domain/otp_repository.dart';
 import 'package:exel_ott/features/otp/ui/otp_screen.dart';
 import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/features/cart/ui/cart_screen.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
+import 'package:exel_ott/features/products/domain/product_search_launch.dart';
 import 'package:exel_ott/features/products/ui/product_detail_screen.dart';
 import 'package:exel_ott/features/products/ui/products_screen.dart';
 import 'package:exel_ott/features/products/ui/public_catalog_screen.dart';
@@ -42,31 +46,48 @@ class AppRouter {
         _imageScanPermissionService = imageScanPermissionService {
     router = GoRouter(
       navigatorKey: rootNavigatorKey,
-      initialLocation: '/home',
+      initialLocation: '/welcome',
+      observers: [
+        FirebaseAnalyticsObserver(
+          analytics: FirebaseMonitoringService.analytics,
+        ),
+      ],
       refreshListenable: _authController,
       redirect: (context, state) {
         final path = state.uri.path;
+        final isWelcome = path == '/welcome';
         final isLoggingIn = path == '/login';
         final isWeb = path == '/web';
         final isCatalog = path == '/catalog' || path.startsWith('/catalog/');
         final signedIn = _authController.isSignedIn;
         if (!signedIn) {
-          if (isLoggingIn || isWeb || isCatalog) return null;
-          return '/login';
+          if (isWelcome || isLoggingIn || isWeb || isCatalog) return null;
+          return '/welcome';
         }
-        if (signedIn && isLoggingIn) return '/home';
+        if (signedIn && isLoggingIn) return '/home/products';
         return null;
       },
       routes: [
+        GoRoute(
+          path: '/welcome',
+          builder: (context, state) =>
+              WelcomeScreen(auth: _authController),
+        ),
         GoRoute(
           path: '/login',
           builder: (context, state) => LoginScreen(auth: _authController),
         ),
         GoRoute(
           path: '/catalog',
-          builder: (context, state) => PublicCatalogScreen(
-            productsRepository: _productsRepository,
-          ),
+          builder: (context, state) {
+            final launch = ProductSearchLaunch.fromQueryParams(
+              state.uri.queryParameters,
+            );
+            return PublicCatalogScreen(
+              productsRepository: _productsRepository,
+              initialLaunch: launch.shouldSearch ? launch : null,
+            );
+          },
           routes: [
             GoRoute(
               path: 'detail/:idProducto',
@@ -184,11 +205,17 @@ class AppRouter {
                 ),
                 GoRoute(
                   path: 'products',
-                  builder: (context, state) => ProductsScreen(
-                    productsRepository: _productsRepository,
-                    cartRepository: _cartRepository,
-                    imageScanPermission: _imageScanPermissionService,
-                  ),
+                  builder: (context, state) {
+                    final launch = ProductSearchLaunch.fromQueryParams(
+                      state.uri.queryParameters,
+                    );
+                    return ProductsScreen(
+                      productsRepository: _productsRepository,
+                      cartRepository: _cartRepository,
+                      imageScanPermission: _imageScanPermissionService,
+                      initialLaunch: launch.shouldSearch ? launch : null,
+                    );
+                  },
                   routes: [
                     GoRoute(
                       path: 'detail/:idProducto',

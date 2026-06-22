@@ -91,6 +91,17 @@ class _LoginScreenState extends State<LoginScreen> {
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SafeArea(
+                bottom: false,
+                child: IconButton(
+                  tooltip: 'Volver',
+                  onPressed: () => context.go('/welcome'),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
+              ),
+            ),
             ClipRRect(
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(32),

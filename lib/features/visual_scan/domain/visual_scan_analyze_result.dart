@@ -1,5 +1,5 @@
+import 'package:exel_ott/features/product_photo_search/domain/detected_product_match.dart';
 import 'package:exel_ott/features/product_photo_search/domain/product_identification_result.dart';
-import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/quote_from_photo/domain/quote_match_result.dart';
 import 'package:exel_ott/features/visual_scan/domain/image_scan_classification.dart';
 
@@ -13,12 +13,14 @@ sealed class VisualScanAnalyzeResult {
 class VisualScanSearchAnalyzeResult extends VisualScanAnalyzeResult {
   const VisualScanSearchAnalyzeResult({
     required super.classification,
-    required this.identification,
-    required this.candidates,
+    required this.response,
+    required this.detected,
   });
 
-  final ProductIdentificationResult identification;
-  final List<ProductCard> candidates;
+  final PhotoIdentificationResponse response;
+  final List<DetectedProductMatch> detected;
+
+  ProductIdentificationResult? get primaryIdentification => response.primary;
 }
 
 class VisualScanQuoteAnalyzeResult extends VisualScanAnalyzeResult {

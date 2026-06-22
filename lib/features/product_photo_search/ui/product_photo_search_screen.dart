@@ -5,6 +5,7 @@ import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/product_photo_search/data/product_photo_search_repository.dart';
+import 'package:exel_ott/features/product_photo_search/domain/detected_product_match.dart';
 import 'package:exel_ott/features/product_photo_search/domain/product_identification_result.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:flutter/material.dart';
@@ -37,14 +38,20 @@ class _ProductPhotoSearchScreenState extends State<ProductPhotoSearchScreen> {
   final List<String?> _photos = [null, null, null];
 
   String? _error;
-  ProductIdentificationResult? _identification;
-  List<ProductCard> _candidates = const [];
-  ProductCard? _selected;
+  PhotoIdentificationResponse? _photoResponse;
+  List<DetectedProductMatch> _detectedProducts = const [];
+  int _activeDetectionIndex = 0;
   int _quantity = 1;
   bool _addingToCart = false;
   bool _addedToCart = false;
 
   bool get _canAnalyze => _photos[0] != null;
+
+  ProductCard? get _selected {
+    if (_detectedProducts.isEmpty) return null;
+    final index = _activeDetectionIndex.clamp(0, _detectedProducts.length - 1);
+    return _detectedProducts[index].selected;
+  }
 
   Future<void> _pickPhoto(int slot, ImageSource source) async {
     try {
@@ -105,9 +112,9 @@ class _ProductPhotoSearchScreenState extends State<ProductPhotoSearchScreen> {
       if (!mounted) return;
       setState(() {
         _step = _SearchStep.result;
-        _identification = result.identification;
-        _candidates = result.candidates;
-        _selected = result.candidates.isNotEmpty ? result.candidates.first : null;
+        _photoResponse = result.response;
+        _detectedProducts = result.detected;
+        _activeDetectionIndex = 0;
         _quantity = 1;
         _addedToCart = false;
       });
@@ -143,9 +150,9 @@ class _ProductPhotoSearchScreenState extends State<ProductPhotoSearchScreen> {
     setState(() {
       _step = _SearchStep.capture;
       _photos.fillRange(0, 3, null);
-      _identification = null;
-      _candidates = const [];
-      _selected = null;
+      _photoResponse = null;
+      _detectedProducts = const [];
+      _activeDetectionIndex = 0;
       _error = null;
       _addedToCart = false;
     });
@@ -362,94 +369,61 @@ class _ProductPhotoSearchScreenState extends State<ProductPhotoSearchScreen> {
     );
   }
 
+  void _selectCatalogProduct(int detectionIndex, ProductCard product) {
+    setState(() {
+      _activeDetectionIndex = detectionIndex;
+      _detectedProducts = [
+        for (var i = 0; i < _detectedProducts.length; i++)
+          if (i == detectionIndex)
+            _detectedProducts[i].copyWith(selected: product)
+          else
+            _detectedProducts[i],
+      ];
+      _addedToCart = false;
+    });
+  }
+
   // ── Resultado ──────────────────────────────────────────────────────────────
 
   Widget _buildResult(BuildContext context) {
     final theme = Theme.of(context);
-    final id = _identification!;
+    final response = _photoResponse;
+    final multipleDetected = _detectedProducts.length > 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Chip de modelo usado
-        Wrap(
-          spacing: 8,
-          children: [
-            _InfoChip(
-              label: id.modeloUsado,
-              icon: Icons.auto_awesome,
-              color: id.modeloUsado.contains('mini')
-                  ? AppColors.catalogAccentAlt
-                  : AppColors.catalogAccent,
-            ),
-            _InfoChip(
-              label: '${id.imagenesAnalizadas} foto${id.imagenesAnalizadas > 1 ? "s" : ""}',
-              icon: Icons.image_outlined,
-              color: AppColors.textSecondary,
-            ),
-            _InfoChip(
-              label: 'Confianza: ${id.confianza}',
-              icon: Icons.bar_chart,
-              color: id.confianza == 'alta'
-                  ? const Color(0xFF16A34A)
-                  : id.confianza == 'media'
-                      ? const Color(0xFFCA8A04)
-                      : AppColors.error,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // Info del producto identificado
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  id.nombre.isNotEmpty ? id.nombre : 'Producto identificado',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        if (response != null) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              if (response.modeloUsado.isNotEmpty)
+                _InfoChip(
+                  label: response.modeloUsado,
+                  icon: Icons.auto_awesome,
+                  color: response.modeloUsado.contains('mini')
+                      ? AppColors.catalogAccentAlt
+                      : AppColors.catalogAccent,
                 ),
-                if (id.marca.isNotEmpty)
-                  Text(id.marca, style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
-                if (id.sku.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  _TagRow(label: 'SKU', value: id.sku),
-                ],
-                if (id.categoria.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  _TagRow(label: 'Categoría', value: id.categoria),
-                ],
-                if (id.descripcion.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    id.descripcion,
-                    style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-                  ),
-                ],
-                if (id.keywords.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: id.keywords
-                        .map((k) => Chip(
-                              label: Text(k, style: const TextStyle(fontSize: 11)),
-                              padding: EdgeInsets.zero,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ))
-                        .toList(),
-                  ),
-                ],
-              ],
-            ),
+              _InfoChip(
+                label:
+                    '${response.imagenesAnalizadas} foto${response.imagenesAnalizadas > 1 ? "s" : ""}',
+                icon: Icons.image_outlined,
+                color: AppColors.textSecondary,
+              ),
+              _InfoChip(
+                label:
+                    '${_detectedProducts.length} producto${_detectedProducts.length == 1 ? '' : 's'} detectado${_detectedProducts.length == 1 ? '' : 's'}',
+                icon: Icons.inventory_2_outlined,
+                color: AppColors.catalogAccent,
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
 
-        // Candidatos del catálogo
-        if (_candidates.isEmpty)
+        if (_detectedProducts.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -457,61 +431,125 @@ class _ProductPhotoSearchScreenState extends State<ProductPhotoSearchScreen> {
               borderRadius: BorderRadius.circular(AppDecorations.radiusMd),
             ),
             child: const Text(
-              'No se encontraron productos en el catálogo para los términos detectados.',
+              'No se detectaron productos en la imagen.',
               textAlign: TextAlign.center,
             ),
           )
-        else ...[
+        else
+          ...List.generate(_detectedProducts.length, (index) {
+            final match = _detectedProducts[index];
+            final id = match.identification;
+            final isActive = _activeDetectionIndex == index;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDecorations.radiusMd),
+                  side: BorderSide(
+                    color: isActive
+                        ? AppColors.catalogAccent
+                        : AppColors.borderLight,
+                    width: isActive ? 2 : 1,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        multipleDetected
+                            ? 'Producto ${index + 1}'
+                            : 'Producto detectado',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        id.displayName,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (id.marca.isNotEmpty)
+                        Text(
+                          id.marca,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      if (id.sku.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        _TagRow(label: 'SKU', value: id.sku),
+                      ],
+                      const SizedBox(height: 12),
+                      const AppSectionLabel(text: 'Coincidencias en catálogo'),
+                      const SizedBox(height: 8),
+                      if (match.candidates.isEmpty)
+                        Text(
+                          'No se encontró este producto en el catálogo.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        )
+                      else
+                        ...match.candidates.map(
+                          (p) => _CandidateTile(
+                            product: p,
+                            selected:
+                                match.selected?.idProducto == p.idProducto,
+                            onTap: () => _selectCatalogProduct(index, p),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+
+        if (_selected != null) ...[
           Row(
             children: [
-              const Expanded(child: AppSectionLabel(text: 'Resultados en catálogo')),
-              Text(
-                '${_candidates.length} encontrado${_candidates.length > 1 ? "s" : ""}',
-                style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              const Text('Cantidad:', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Spacer(),
+              IconButton(
+                onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                icon: const Icon(Icons.remove_circle_outline),
+              ),
+              Text('$_quantity', style: theme.textTheme.titleMedium),
+              IconButton(
+                onPressed: () => setState(() => _quantity++),
+                icon: const Icon(Icons.add_circle_outline),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          ..._candidates.map((p) => _CandidateTile(
-                product: p,
-                selected: _selected?.idProducto == p.idProducto,
-                onTap: () => setState(() => _selected = p),
-              )),
-          const SizedBox(height: 16),
-
-          // Cantidad + agregar al carrito
-          if (_selected != null) ...[
-            Row(
-              children: [
-                const Text('Cantidad:', style: TextStyle(fontWeight: FontWeight.w600)),
-                const Spacer(),
-                IconButton(
-                  onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
-                  icon: const Icon(Icons.remove_circle_outline),
-                ),
-                Text('$_quantity', style: theme.textTheme.titleMedium),
-                IconButton(
-                  onPressed: () => setState(() => _quantity++),
-                  icon: const Icon(Icons.add_circle_outline),
-                ),
-              ],
+          FilledButton.icon(
+            onPressed: _addingToCart || _addedToCart ? null : _addToCart,
+            icon: _addingToCart
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(_addedToCart ? Icons.check : Icons.shopping_cart_outlined),
+            label: Text(
+              _addedToCart ? 'Agregado al carrito' : 'Agregar al carrito',
             ),
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          ),
+          if (_addedToCart) ...[
             const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: _addingToCart || _addedToCart ? null : _addToCart,
-              icon: _addingToCart
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Icon(_addedToCart ? Icons.check : Icons.shopping_cart_outlined),
-              label: Text(_addedToCart ? 'Agregado al carrito' : 'Agregar al carrito'),
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+            OutlinedButton(
+              onPressed: () => context.push('/home/cart'),
+              child: const Text('Ver carrito'),
             ),
-            if (_addedToCart) ...[
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: () => context.push('/home/cart'),
-                child: const Text('Ver carrito'),
-              ),
-            ],
           ],
         ],
 

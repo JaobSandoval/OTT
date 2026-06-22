@@ -78,11 +78,18 @@ int? parseStockQuantity(String raw) {
 }
 
 /// Etiqueta de existencia para la lista de productos.
-String productStockLabel(String raw, {bool pending = false}) {
+String productStockLabel(
+  String raw, {
+  bool pending = false,
+  bool asBackorder = false,
+}) {
   if (pending) return '...';
   final qty = parseStockQuantity(raw);
-  if (qty == null || qty <= 0) return 'Backorder';
+  if (qty == null || qty <= 0) return asBackorder ? 'Backorder' : '0';
   return '$qty';
 }
 
 bool productHasStock(String raw) => (parseStockQuantity(raw) ?? 0) > 0;
+
+bool isProductFullyOutOfStock(String sucursalStock, String nacionalStock) =>
+    !productHasStock(sucursalStock) && !productHasStock(nacionalStock);

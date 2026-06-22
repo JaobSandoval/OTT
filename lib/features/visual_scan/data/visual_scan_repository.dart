@@ -1,8 +1,7 @@
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
 import 'package:exel_ott/features/product_photo_search/data/product_photo_search_repository.dart';
-import 'package:exel_ott/features/product_photo_search/domain/product_identification_result.dart';
-import 'package:exel_ott/features/products/domain/product_card.dart';
+import 'package:exel_ott/features/product_photo_search/domain/detected_product_match.dart';
 import 'package:exel_ott/features/quote_from_photo/data/quote_from_photo_repository.dart';
 import 'package:exel_ott/features/quote_from_photo/data/quote_image_compressor.dart';
 import 'package:exel_ott/features/quote_from_photo/domain/quote_line.dart';
@@ -73,15 +72,12 @@ class VisualScanRepository {
     final search = await _productPhoto.identifyAndSearch(filePaths);
     return VisualScanSearchAnalyzeResult(
       classification: classification,
-      identification: search.identification,
-      candidates: search.candidates,
+      response: search.response,
+      detected: search.detected,
     );
   }
 
-  Future<({
-    ProductIdentificationResult identification,
-    List<ProductCard> candidates,
-  })> identifyAndSearch(List<String> filePaths) {
+  Future<PhotoSearchResult> identifyAndSearch(List<String> filePaths) {
     return _productPhoto.identifyAndSearch(filePaths);
   }
 

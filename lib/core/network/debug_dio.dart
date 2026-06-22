@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as dev;
 import 'dart:io';
@@ -6,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:exel_ott/core/debug/technical_log_entry.dart';
 import 'package:exel_ott/core/debug/technical_log_store.dart';
+import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -77,7 +79,25 @@ class TechnicalLogInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     _logResponse(err.response, err);
+    _reportApiError(err);
     handler.next(err);
+  }
+
+  void _reportApiError(DioException err) {
+    final options = err.requestOptions;
+    final started = options.extra[_requestStartKey] as DateTime?;
+    final durationMs = started != null
+        ? DateTime.now().difference(started).inMilliseconds
+        : null;
+    final status = err.response?.statusCode;
+    unawaited(
+      FirebaseMonitoringService.instance.logApiError(
+        endpoint: options.uri.toString(),
+        statusCode: status,
+        errorType: err.type.name,
+        durationMs: durationMs,
+      ),
+    );
   }
 
   void _logResponse(Response<dynamic>? response, DioException? err) {
@@ -99,6 +119,12 @@ class TechnicalLogInterceptor extends Interceptor {
         'Body:\n$responseBody',
         name: 'HTTP.RES',
       );
+
+      final soapJson = _extractSoapResultJson(responseBody);
+      if (soapJson != null) {
+        dev.log(soapJson, name: 'HTTP.RES.JSON');
+        _logOpenAiDebugFromJson(soapJson);
+      }
 
       if (options != null) {
         final fullRequestBody = options.extra['_fullBody'] as String? ?? '';
@@ -274,5 +300,51 @@ class TechnicalLogInterceptor extends Interceptor {
       out[k] = k.toLowerCase() == 'authorization' ? '(redactado)' : (value?.toString() ?? '');
     });
     return out;
+  }
+
+  /// Extrae y formatea el JSON dentro de un tag *Result de respuesta SOAP.
+  static String? _extractSoapResultJson(String xmlOrText) {
+    if (xmlOrText.isEmpty) return null;
+    final match = RegExp(
+      r'<(\w+Result)[^>]*>([\s\S]*?)</\1>',
+      caseSensitive: false,
+    ).firstMatch(xmlOrText);
+    if (match == null) return null;
+
+    var inner = match.group(2)?.trim() ?? '';
+    if (inner.isEmpty) return null;
+
+    // Algunos ASMX escapan el JSON como entidades XML.
+    inner = inner
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&amp;', '&');
+
+    try {
+      final decoded = jsonDecode(inner);
+      return const JsonEncoder.withIndent('  ').convert(decoded);
+    } on Object {
+      return inner;
+    }
+  }
+
+  /// Si el JSON incluye debug_openai (API con OpenAI:IncludeDebugInResponse=true),
+  /// lo imprime aparte para ver la llamada intermedia.
+  static void _logOpenAiDebugFromJson(String prettyJson) {
+    try {
+      final decoded = jsonDecode(prettyJson);
+      if (decoded is! Map) return;
+      final debug = decoded['debug_openai'];
+      if (debug == null) return;
+
+      dev.log(
+        const JsonEncoder.withIndent('  ').convert(debug),
+        name: 'OpenAI.DEBUG',
+      );
+    } on Object {
+      // ignore
+    }
   }
 }

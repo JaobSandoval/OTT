@@ -1,8 +1,11 @@
 import 'package:exel_ott/app/app_router.dart';
 import 'package:exel_ott/core/auth/auth_controller.dart';
+import 'package:exel_ott/core/config/app_config_gate_controller.dart';
 import 'package:exel_ott/core/debug/debug_terminal_overlay.dart';
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/config/app_config.dart';
+import 'package:exel_ott/core/ui/force_update_screen.dart';
+import 'package:exel_ott/core/ui/maintenance_screen.dart';
 import 'package:exel_ott/core/notifications/local_notifications_service.dart';
 import 'package:exel_ott/core/notifications/push_notification_service.dart';
 import 'package:exel_ott/features/auth/data/auth_api_repository.dart';
@@ -32,6 +35,7 @@ class ExelOttApp extends StatefulWidget {
 }
 
 class _ExelOttAppState extends State<ExelOttApp> {
+  late final AppConfigGateController _configGate;
   late final SessionStore _sessionStore;
   late final AuthController _authController;
   late final LocalNotificationsService _notifications;
@@ -50,6 +54,8 @@ class _ExelOttAppState extends State<ExelOttApp> {
   @override
   void initState() {
     super.initState();
+    _configGate = AppConfigGateController();
+    _configGate.evaluate();
     _sessionStore = SessionStore();
     _notifications = LocalNotificationsService();
 
@@ -144,13 +150,13 @@ class _ExelOttAppState extends State<ExelOttApp> {
 
   @override
   void dispose() {
+    _configGate.dispose();
     _authController.removeListener(_onAuthChanged);
     _authController.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildMainApp() {
     return MaterialApp.router(
       routerConfig: _appRouter.router,
       builder: (context, child) {
@@ -169,6 +175,46 @@ class _ExelOttAppState extends State<ExelOttApp> {
       debugShowCheckedModeBanner: false,
       title: AppConfig.appName,
       theme: AppTheme.light,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _configGate,
+      builder: (context, _) {
+        switch (_configGate.state) {
+          case AppConfigGateState.loading:
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              home: const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              ),
+            );
+          case AppConfigGateState.maintenance:
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              home: MaintenanceScreen(
+                message: _configGate.maintenanceMessage,
+                isReloading: _configGate.isRefreshing,
+                onReload: () => _configGate.evaluate(refreshRemote: true),
+              ),
+            );
+          case AppConfigGateState.forceUpdate:
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              home: ForceUpdateScreen(
+                appVersion: _configGate.appVersion,
+                requiredVersion: _configGate.requiredVersion,
+              ),
+            );
+          case AppConfigGateState.ready:
+            return _buildMainApp();
+        }
+      },
     );
   }
 }

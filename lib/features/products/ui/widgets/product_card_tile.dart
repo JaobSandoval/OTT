@@ -17,6 +17,7 @@ class ProductCardTile extends StatefulWidget {
     required this.repository,
     this.cartRepository,
     this.catalogOnly = false,
+    this.listIndex,
     this.onTap,
   });
 
@@ -24,6 +25,7 @@ class ProductCardTile extends StatefulWidget {
   final ProductsRepository repository;
   final CartRepository? cartRepository;
   final bool catalogOnly;
+  final int? listIndex;
   final VoidCallback? onTap;
 
   @override
@@ -33,19 +35,34 @@ class ProductCardTile extends StatefulWidget {
 class _ProductCardTileState extends State<ProductCardTile> {
   String? _precio;
   bool _loadingPrecio = false;
+  String? _imageUrl;
   String? _existenciaSucursal;
   bool _loadingExistencia = false;
   bool _existenciaFetchDone = false;
   bool _addingToCart = false;
+  String _sucursalLabel = 'SUCURSAL';
 
   @override
   void initState() {
     super.initState();
     if (widget.catalogOnly) return;
     _hydratePrecioFromCache();
+    _hydrateImageFromCache();
     _hydrateExistenciaFromCache();
-    if (_precio == null) _loadPrecio();
-    if (!_existenciaFetchDone) _loadExistencia();
+    _loadSucursalLabel();
+    if (!_existenciaFetchDone) _loadCardData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (widget.catalogOnly || widget.listIndex == null) return;
+    widget.repository.onProductListIndexVisible(widget.listIndex!);
+  }
+
+  Future<void> _loadSucursalLabel() async {
+    final label = await widget.repository.userSucursalLabel();
+    if (mounted) setState(() => _sucursalLabel = label);
   }
 
   @override
@@ -53,9 +70,9 @@ class _ProductCardTileState extends State<ProductCardTile> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.product.idProducto != widget.product.idProducto) {
       _hydratePrecioFromCache();
+      _hydrateImageFromCache();
       _hydrateExistenciaFromCache();
-      if (_precio == null && !_loadingPrecio) _loadPrecio();
-      if (!_existenciaFetchDone && !_loadingExistencia) _loadExistencia();
+      if (!_existenciaFetchDone && !_loadingExistencia) _loadCardData();
     }
   }
 
@@ -80,6 +97,11 @@ class _ProductCardTileState extends State<ProductCardTile> {
     }
   }
 
+  void _hydrateImageFromCache() {
+    final cached = widget.repository.getCachedImageUrl(widget.product.idProducto);
+    _imageUrl = cached;
+  }
+
   void _hydrateExistenciaFromCache() {
     final cached =
         widget.repository.getCachedExistencia(widget.product.idProducto);
@@ -95,50 +117,38 @@ class _ProductCardTileState extends State<ProductCardTile> {
     }
   }
 
-  Future<void> _loadPrecio() async {
-    if (_loadingPrecio || _precio != null) return;
-    if (widget.repository.hasCachedPrecio(widget.product.idProducto)) {
-      setState(() {
-        _precio = widget.repository.getCachedPrecio(widget.product.idProducto);
-      });
-      return;
-    }
-    setState(() => _loadingPrecio = true);
-    try {
-      final precio =
-          await widget.repository.fetchPrecio(widget.product.idProducto);
-      if (!mounted) return;
-      setState(() {
-        _precio = precio;
-        _loadingPrecio = false;
-      });
-    } on Object {
-      if (!mounted) return;
-      setState(() => _loadingPrecio = false);
-    }
-  }
-
-  Future<void> _loadExistencia() async {
+  Future<void> _loadCardData() async {
     if (_loadingExistencia || _existenciaFetchDone) return;
-    setState(() => _loadingExistencia = true);
+    setState(() {
+      _loadingExistencia = true;
+      if (_precio == null) _loadingPrecio = true;
+    });
     try {
-      final summary =
-          await widget.repository.fetchExistencia(widget.product.idProducto);
+      final summary = await widget.repository.fetchExistencia(
+        widget.product.idProducto,
+        listIndex: widget.listIndex,
+      );
       if (!mounted) return;
       setState(() {
         _existenciaSucursal =
             summary.sucursal.isNotEmpty ? summary.sucursal : null;
+        _precio = summary.precio;
+        _imageUrl = summary.imageUrl;
         _existenciaFetchDone = true;
         _loadingExistencia = false;
+        _loadingPrecio = false;
       });
     } on Object {
       if (!mounted) return;
       setState(() {
         _existenciaFetchDone = true;
         _loadingExistencia = false;
+        _loadingPrecio = false;
       });
     }
   }
+
+  String get _displayImageUrl => _imageUrl ?? widget.product.imageUrl;
 
   void _openDetail() {
     if (widget.onTap != null) {
@@ -226,49 +236,48 @@ class _ProductCardTileState extends State<ProductCardTile> {
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(AppDecorations.radiusLg),
                       ),
-                      child: AspectRatio(
-                        aspectRatio: 4 / 3,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ColoredBox(
-                              color: AppColors.cardWhite,
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
+                      child: Stack(
+                        clipBehavior: Clip.hardEdge,
+                        children: [
+                          ColoredBox(
+                            color: AppColors.cardWhite,
+                            child: Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: Center(
                                 child: ZoomableProductImage(
-                                  url: widget.product.imageUrl,
+                                  url: _displayImageUrl,
+                                  fit: BoxFit.scaleDown,
+                                  enablePinchZoom: false,
+                                  enableFullscreenOnTap: false,
+                                  highQuality: true,
                                   loadingBuilder:
                                       (context, child, loadingProgress) {
                                     if (loadingProgress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: AppColors.catalogAccent,
-                                        value: loadingProgress
-                                                    .expectedTotalBytes !=
-                                                null
-                                            ? loadingProgress
-                                                    .cumulativeBytesLoaded /
-                                                loadingProgress
-                                                    .expectedTotalBytes!
-                                            : null,
+                                    return const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 48),
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppColors.catalogAccent,
+                                        ),
                                       ),
                                     );
                                   },
                                 ),
                               ),
                             ),
-                            if (widget.product.marca.isNotEmpty)
-                              Positioned(
-                                top: 10,
-                                left: 10,
-                                child: _Chip(
-                                  label: widget.product.marca,
-                                  color: AppColors.catalogAccent,
-                                ),
+                          ),
+                          if (widget.product.marca.isNotEmpty)
+                            Positioned(
+                              top: 10,
+                              left: 10,
+                              child: _Chip(
+                                label: widget.product.marca,
+                                color: AppColors.catalogAccent,
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
                     ),
                     Padding(
@@ -338,32 +347,11 @@ class _ProductCardTileState extends State<ProductCardTile> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _StockChip(
-                          label: 'Sucursal',
-                          value: productStockLabel(
-                            _sucursalStock,
-                            pending: _sucursalPending,
-                          ),
-                          color: AppColors.catalogAccent,
-                          isBackorder: !_sucursalPending &&
-                              !productHasStock(_sucursalStock),
-                          isPending: _sucursalPending,
-                        ),
-                        _StockChip(
-                          label: 'Nacional',
-                          value: productStockLabel(
-                            widget.product.existenciaNacional,
-                          ),
-                          color: AppColors.catalogAccentAlt,
-                          isBackorder: !productHasStock(
-                            widget.product.existenciaNacional,
-                          ),
-                        ),
-                      ],
+                    _ProductStockRow(
+                      sucursalLabel: _sucursalLabel,
+                      sucursalStock: _sucursalStock,
+                      nacionalStock: widget.product.existenciaNacional,
+                      sucursalPending: _sucursalPending,
                     ),
                   ],
                 ),
@@ -378,11 +366,11 @@ class _ProductCardTileState extends State<ProductCardTile> {
 
   Widget _buildPrecio(ThemeData theme) {
     if (_loadingPrecio) {
-      return SizedBox(
-        height: 20,
-        width: 20,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
+      return const SizedBox(
+        width: 80,
+        child: LinearProgressIndicator(
+          minHeight: 2,
+          backgroundColor: AppColors.borderLight,
           color: AppColors.catalogAccent,
         ),
       );
@@ -431,41 +419,112 @@ class _Chip extends StatelessWidget {
   }
 }
 
-class _StockChip extends StatelessWidget {
-  const _StockChip({
-    required this.label,
-    required this.value,
-    required this.color,
-    this.isBackorder = false,
-    this.isPending = false,
+class _ProductStockRow extends StatelessWidget {
+  const _ProductStockRow({
+    required this.sucursalLabel,
+    required this.sucursalStock,
+    required this.nacionalStock,
+    required this.sucursalPending,
   });
 
-  final String label;
-  final String value;
-  final Color color;
-  final bool isBackorder;
-  final bool isPending;
+  final String sucursalLabel;
+  final String sucursalStock;
+  final String nacionalStock;
+  final bool sucursalPending;
+
+  static const _labelColor = Color(0xFF334155);
+  static const _valueColor = Color(0xFF71717A);
+  static const _separatorColor = Color(0xFFD4D4D8);
 
   @override
   Widget build(BuildContext context) {
-    final displayColor = isPending
+    final theme = Theme.of(context);
+    final isFullBackorder = !sucursalPending &&
+        isProductFullyOutOfStock(sucursalStock, nacionalStock);
+
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 0,
+      runSpacing: 4,
+      children: [
+        _StockEntry(
+          theme: theme,
+          label: sucursalLabel,
+          value: productStockLabel(
+            sucursalStock,
+            pending: sucursalPending,
+            asBackorder: isFullBackorder,
+          ),
+          isBackorder: isFullBackorder,
+          isPending: sucursalPending,
+          showLeadingSeparator: false,
+        ),
+        _StockEntry(
+          theme: theme,
+          label: 'NACIONAL',
+          value: productStockLabel(
+            nacionalStock,
+            asBackorder: isFullBackorder,
+          ),
+          isBackorder: isFullBackorder,
+          showLeadingSeparator: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _StockEntry extends StatelessWidget {
+  const _StockEntry({
+    required this.theme,
+    required this.label,
+    required this.value,
+    required this.isBackorder,
+    this.isPending = false,
+    this.showLeadingSeparator = true,
+  });
+
+  final ThemeData theme;
+  final String label;
+  final String value;
+  final bool isBackorder;
+  final bool isPending;
+  final bool showLeadingSeparator;
+
+  @override
+  Widget build(BuildContext context) {
+    final valueColor = isPending
         ? AppColors.textSecondary
         : isBackorder
-            ? AppColors.error
-            : color;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: displayColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        '$label · $value',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: displayColor,
-              fontWeight: FontWeight.w600,
+            ? AppColors.catalogAccent
+            : _ProductStockRow._valueColor;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (showLeadingSeparator)
+          Text(
+            '| ',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: _ProductStockRow._separatorColor,
+              fontWeight: FontWeight.w300,
             ),
-      ),
+          ),
+        Text(
+          '$label: ',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: _ProductStockRow._labelColor,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          value,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: valueColor,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ],
     );
   }
 }

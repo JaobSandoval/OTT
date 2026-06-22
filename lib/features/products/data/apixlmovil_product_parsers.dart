@@ -24,14 +24,80 @@ class ApiXlMovilProductParsers {
     return precio.isEmpty ? null : precio;
   }
 
-  /// Resumen de existencia para tarjetas (sucursal del usuario + total nacional).
-  static ({String sucursal, String nacional}) parseExistenciaSummary(
+  static ({
+    String sucursal,
+    String nacional,
+    String? precio,
+    String? imageUrl,
+  }) parseExistenciaSummary(
     String payload, {
     String? idLocalidadUsuario,
     String? sucursalNombreUsuario,
   }) {
-    final existenciaDecoded = _decodeJson(payload);
-    final map = _firstMap(existenciaDecoded) ?? {};
+    final map = _firstMap(_decodeJson(payload)) ?? {};
+    return _parseExistenciaFromMap(
+      map,
+      idLocalidadUsuario: idLocalidadUsuario,
+      sucursalNombreUsuario: sucursalNombreUsuario,
+    );
+  }
+
+  /// Varias filas cuando `id_producto` llega como lista separada por comas.
+  static Map<String, ({
+    String sucursal,
+    String nacional,
+    String? precio,
+    String? imageUrl,
+  })> parseExistenciaSummaryBatch(
+    String payload, {
+    required List<String> requestedIds,
+    String? idLocalidadUsuario,
+    String? sucursalNombreUsuario,
+  }) {
+    final maps = _productMapsFromPayload(_decodeJson(payload));
+    final byId = <String, ({
+      String sucursal,
+      String nacional,
+      String? precio,
+      String? imageUrl,
+    })>{};
+
+    for (final map in maps) {
+      final id = _pick(map, ['id_producto', 'Id_Producto']);
+      if (id.isEmpty) continue;
+      byId[id] = _parseExistenciaFromMap(
+        map,
+        idLocalidadUsuario: idLocalidadUsuario,
+        sucursalNombreUsuario: sucursalNombreUsuario,
+      );
+    }
+
+    return {
+      for (final id in requestedIds)
+        id: byId[id] ??
+            const (
+              sucursal: '',
+              nacional: '',
+              precio: null,
+              imageUrl: null,
+            ),
+    };
+  }
+
+  static ({
+    String sucursal,
+    String nacional,
+    String? precio,
+    String? imageUrl,
+  }) _parseExistenciaFromMap(
+    Map<String, dynamic> map, {
+    String? idLocalidadUsuario,
+    String? sucursalNombreUsuario,
+  }) {
+    final precioRaw = _pick(map, ['precio', 'Precio']);
+    final precio = precioRaw.isEmpty ? null : precioRaw;
+    final imagenesZoom = _parseZoomImagenes(map['imagenes']);
+    final imageUrl = imagenesZoom.isNotEmpty ? imagenesZoom.first : null;
 
     var sucursal = _pick(map, [
       'Existencia',
@@ -83,7 +149,12 @@ class ApiXlMovilProductParsers {
       nacional = '$nacionalFromList';
     }
 
-    return (sucursal: sucursal, nacional: nacional);
+    return (
+      sucursal: sucursal,
+      nacional: nacional,
+      precio: precio,
+      imageUrl: imageUrl,
+    );
   }
 
   static ProductDetail parsePublicDetail({
@@ -237,6 +308,36 @@ class ApiXlMovilProductParsers {
       if (first is Map) return Map<String, dynamic>.from(first);
     }
     return null;
+  }
+
+  static List<Map<String, dynamic>> _productMapsFromPayload(dynamic decoded) {
+    if (decoded is List) {
+      return decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    if (decoded is Map) {
+      final map = Map<String, dynamic>.from(decoded);
+      for (final key in const [
+        'productos',
+        'Productos',
+        'items',
+        'Items',
+        'data',
+        'Data',
+      ]) {
+        final inner = map[key];
+        if (inner is List) {
+          return inner
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+        }
+      }
+      return [map];
+    }
+    return const [];
   }
 
   static String _pick(Map<String, dynamic> map, List<String> keys) {

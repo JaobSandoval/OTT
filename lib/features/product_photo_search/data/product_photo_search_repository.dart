@@ -2,7 +2,7 @@ import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
 import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/features/product_photo_search/data/apixlmovil_product_photo_client.dart';
-import 'package:exel_ott/features/product_photo_search/domain/product_identification_result.dart';
+import 'package:exel_ott/features/product_photo_search/domain/detected_product_match.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/quote_from_photo/data/quote_image_compressor.dart';
@@ -34,22 +34,18 @@ class ProductPhotoSearchRepository {
     return (idUsuario: idUsuario, password: creds.password);
   }
 
-  /// Comprime y envía hasta 3 fotos. Devuelve el resultado de identificación
-  /// más una lista de candidatos del catálogo.
-  Future<({
-    ProductIdentificationResult identification,
-    List<ProductCard> candidates,
-  })> identifyAndSearch(List<String> filePaths) async {
+  /// Comprime y envía hasta 3 fotos. Devuelve cada producto detectado con
+  /// sus coincidencias en el catálogo.
+  Future<PhotoSearchResult> identifyAndSearch(List<String> filePaths) async {
     if (filePaths.isEmpty) throw Exception('Se requiere al menos una foto.');
 
-    // Comprimir todas las imágenes en paralelo
     final compressed = await Future.wait(
       filePaths.take(3).map(QuoteImageCompressor.compressToBase64),
     );
 
     final creds = await _credentials();
 
-    final identification = await _photoClient.identificar(
+    final response = await _photoClient.identificar(
       idUsuario: creds.idUsuario,
       password: creds.password,
       images: compressed
@@ -57,10 +53,23 @@ class ProductPhotoSearchRepository {
           .toList(),
     );
 
-    // Búsqueda en cascada: SKU → nombre → keywords
-    final candidates = await _searchCascade(identification.searchQueries);
+    if (response.productos.isEmpty) {
+      return PhotoSearchResult(response: response, detected: const []);
+    }
 
-    return (identification: identification, candidates: candidates);
+    final detected = <DetectedProductMatch>[];
+    for (final identification in response.productos) {
+      final candidates = await _searchCascade(identification.searchQueries);
+      detected.add(
+        DetectedProductMatch(
+          identification: identification,
+          candidates: candidates,
+          selected: candidates.isNotEmpty ? candidates.first : null,
+        ),
+      );
+    }
+
+    return PhotoSearchResult(response: response, detected: detected);
   }
 
   /// Intenta cada query en orden y devuelve los primeros resultados encontrados.

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
@@ -165,6 +166,9 @@ class _QuoteFromPhotoScreenState extends State<QuoteFromPhotoScreen> {
     final code = await BarcodeScannerSheet.show(context);
     if (code == null || !mounted) return;
 
+    await FirebaseMonitoringService.instance.logBarcodeScanned(
+      source: 'quote_from_photo',
+    );
     // Mostrar loading breve mientras busca
     setState(() => _error = null);
     final match = await widget.repository.searchByBarcode(code);

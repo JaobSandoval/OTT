@@ -1,4 +1,5 @@
 import 'package:exel_ott/core/auth/session_store.dart';
+import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
 import 'package:exel_ott/core/security/bff_request_token_manager.dart';
 import 'package:exel_ott/core/debug/technical_log_store.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
@@ -30,6 +31,12 @@ class AuthController extends ChangeNotifier {
     _token = await _sessionStore.readToken();
     if (_token != null) {
       _user = await _authRepository.getCurrentUser(token: _token!);
+      final userKey = _user?.email.trim();
+      if (userKey != null && userKey.isNotEmpty) {
+        await FirebaseMonitoringService.instance.setSignedInUser(
+          userId: userKey,
+        );
+      }
     }
     _initialized = true;
     notifyListeners();
@@ -54,6 +61,13 @@ class AuthController extends ChangeNotifier {
       _token = result.token;
       _user = result.user;
       await _sessionStore.writeToken(result.token);
+      final userKey = result.user.email.trim();
+      if (userKey.isNotEmpty) {
+        await FirebaseMonitoringService.instance.setSignedInUser(
+          userId: userKey,
+        );
+      }
+      await FirebaseMonitoringService.instance.logLogin();
       TechnicalLogStore.instance.info(
         'AUTH',
         'Login exitoso',
@@ -64,13 +78,15 @@ class AuthController extends ChangeNotifier {
       );
       return null;
     } catch (e) {
+      final message = friendlyErrorMessage(e);
+      await FirebaseMonitoringService.instance.logLoginFailed(reason: message);
       TechnicalLogStore.instance.error(
         'AUTH',
         'Login fallido (mensaje amigable al usuario)',
-        error: friendlyErrorMessage(e),
+        error: message,
         fields: {'raw': e.toString()},
       );
-      return friendlyErrorMessage(e);
+      return message;
     } finally {
       _loading = false;
       notifyListeners();
@@ -81,6 +97,8 @@ class AuthController extends ChangeNotifier {
     _token = null;
     _user = null;
     BffRequestTokenManager.instance.clear();
+    await FirebaseMonitoringService.instance.logLogout();
+    await FirebaseMonitoringService.instance.clearSignedInUser();
     await _sessionStore.clear();
     notifyListeners();
   }

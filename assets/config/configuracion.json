@@ -1,9 +1,15 @@
 {
+  "nombreApp": "AppXLStore",
+  "version": "1.0.17",
+  "enMantenimiento": "0",
+  "mensajeEnMantenimiento": "De momento el app de XLStore se encuentra en mantenimiento, favor de revisar más tarde",
   "exelInfoUsuarioUrl": "https://xls.exel.mx:6983/AI/AI.asmx/InfoUsuario",
   "loginRegistrarTokenSoapUrl": "https://www.exel.com.mx/APISeguridad/WS.asmx",
   "urlApiXLMovil": "https://www.exel.com.mx/apiXLMovil/",
   "urlExel": "https://www.exel.com.mx/",
   "urlXLStore": "https://www.exel.com.mx/xlstore/",
+  "urlGooglePlay": "https://play.google.com/store/apps/details?id=com.appXLStore",
+  "urlAppStore": "https://apps.apple.com/mx/app/appXLStore/id6477489729",
   "urlHazOlvidadoTuContraseña": "https://www.exel.com.mx/xlstore/Recuperar",
   "urlAltaDeCliente": "https://www.exel.com.mx/AltaSocio/Solicitud.aspx"
 }

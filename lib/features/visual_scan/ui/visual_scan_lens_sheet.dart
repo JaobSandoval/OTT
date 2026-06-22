@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -45,7 +46,8 @@ class VisualScanLensSheet extends StatefulWidget {
   State<VisualScanLensSheet> createState() => _VisualScanLensSheetState();
 }
 
-class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
+class _VisualScanLensSheetState extends State<VisualScanLensSheet>
+    with WidgetsBindingObserver {
   final _picker = ImagePicker();
   final _previewKey = GlobalKey();
   late final MobileScannerController _scannerController;
@@ -60,9 +62,11 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Sin permiso de fotos → entra directo a escaneo.
     _barcodeMode = !widget.allowPhotoCapture;
     _scannerController = MobileScannerController(
+      autoStart: false,
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
       torchEnabled: false,
@@ -71,7 +75,9 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
       'initState allowPhoto=${widget.allowPhotoCapture} '
       'barcodeMode=$_barcodeMode',
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _scannerController.start();
       if (!mounted) return;
       final state = _scannerController.value;
       _log(
@@ -83,8 +89,25 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
 
   @override
   void dispose() {
-    _scannerController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_scannerController.dispose());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_scannerController.value.hasCameraPermission) return;
+
+    switch (state) {
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        return;
+      case AppLifecycleState.resumed:
+        unawaited(_scannerController.start());
+      case AppLifecycleState.inactive:
+        unawaited(_scannerController.stop());
+    }
   }
 
   Future<void> _pickPhotoFromGallery() async {
@@ -196,7 +219,6 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
       _lastCode = null;
       _error = null;
     });
-    _scannerController.start();
   }
 
   void _exitBarcodeMode() {
@@ -243,9 +265,14 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
           RepaintBoundary(
             key: _previewKey,
             child: MobileScanner(
-              key: ValueKey('scanner-$_barcodeMode'),
               controller: _scannerController,
               onDetect: _onDetect,
+              errorBuilder: (context, error, child) {
+                return _LensScannerCameraError(
+                  error: error,
+                  onRetry: () => unawaited(_scannerController.start()),
+                );
+              },
             ),
           ),
 
@@ -457,6 +484,63 @@ class _VisualScanLensSheetState extends State<VisualScanLensSheet> {
             onTap: _enterBarcodeMode,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Error de cámara / permisos ───────────────────────────────────────────────
+
+class _LensScannerCameraError extends StatelessWidget {
+  const _LensScannerCameraError({
+    required this.error,
+    required this.onRetry,
+  });
+
+  final MobileScannerException error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final denied =
+        error.errorCode == MobileScannerErrorCode.permissionDenied;
+    final message = denied
+        ? 'Permite el acceso a la cámara en Ajustes para usar Exel Lens.'
+        : 'No se pudo abrir la cámara.';
+
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                denied ? Icons.no_photography : Icons.error_outline,
+                color: Colors.white70,
+                size: 40,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              if (!denied) ...[
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white30),
+                  ),
+                  onPressed: onRetry,
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

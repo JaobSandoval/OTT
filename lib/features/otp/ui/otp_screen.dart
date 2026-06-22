@@ -1,4 +1,5 @@
 import 'package:exel_ott/core/config/app_config.dart';
+import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
@@ -34,22 +35,32 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   Future<void> _refresh() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
+      await FirebaseMonitoringService.instance.logOtpRequested();
       final otp = await widget.otpRepository.fetchCurrent();
+      if (!mounted) return;
       setState(() => _otp = otp);
+      if (otp != null && otp.code.isNotEmpty) {
+        await FirebaseMonitoringService.instance.logOtpVerified();
+      }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = friendlyErrorMessage(e));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   Future<void> _simulateIncoming() async {
     final otp = await widget.otpRepository.rotateMock();
+    if (!mounted) return;
     await widget.notifications.showOtpAvailableNotification(
       title: 'Código disponible',
       body: 'Toca para abrir la app y ver el código.',

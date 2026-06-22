@@ -7,8 +7,8 @@ class ProductIdentificationResult {
     required this.descripcion,
     required this.keywords,
     required this.confianza,
-    required this.modeloUsado,
-    required this.imagenesAnalizadas,
+    this.modeloUsado = '',
+    this.imagenesAnalizadas = 1,
   });
 
   final String nombre;
@@ -22,6 +22,15 @@ class ProductIdentificationResult {
   final String confianza;
   final String modeloUsado;
   final int imagenesAnalizadas;
+
+  bool get hasContent =>
+      nombre.isNotEmpty ||
+      marca.isNotEmpty ||
+      sku.isNotEmpty ||
+      keywords.isNotEmpty;
+
+  String get displayName =>
+      nombre.isNotEmpty ? nombre : (sku.isNotEmpty ? sku : 'Producto detectado');
 
   /// La query más relevante para buscar en el catálogo.
   /// Prioridad: SKU → nombre → primer keyword.
@@ -40,7 +49,11 @@ class ProductIdentificationResult {
     return queries.toList();
   }
 
-  static ProductIdentificationResult fromJson(Map<String, dynamic> json) {
+  static ProductIdentificationResult fromJson(
+    Map<String, dynamic> json, {
+    String modeloUsado = '',
+    int imagenesAnalizadas = 1,
+  }) {
     return ProductIdentificationResult(
       nombre: (json['nombre'] as String? ?? '').trim(),
       marca: (json['marca'] as String? ?? '').trim(),
@@ -52,8 +65,66 @@ class ProductIdentificationResult {
           .where((s) => s.isNotEmpty)
           .toList(),
       confianza: (json['confianza'] as String? ?? 'baja').trim().toLowerCase(),
-      modeloUsado: (json['modelo_usado'] as String? ?? '').trim(),
-      imagenesAnalizadas: (json['imagenes_analizadas'] as int?) ?? 1,
+      modeloUsado:
+          modeloUsado.isNotEmpty
+              ? modeloUsado
+              : (json['modelo_usado'] as String? ?? '').trim(),
+      imagenesAnalizadas:
+          imagenesAnalizadas > 0
+              ? imagenesAnalizadas
+              : (json['imagenes_analizadas'] as int?) ?? 1,
+    );
+  }
+}
+
+/// Respuesta completa del API de identificación por foto (1 o más productos).
+class PhotoIdentificationResponse {
+  const PhotoIdentificationResponse({
+    required this.productos,
+    required this.modeloUsado,
+    required this.imagenesAnalizadas,
+  });
+
+  final List<ProductIdentificationResult> productos;
+  final String modeloUsado;
+  final int imagenesAnalizadas;
+
+  ProductIdentificationResult? get primary =>
+      productos.isNotEmpty ? productos.first : null;
+
+  static PhotoIdentificationResponse fromJson(Map<String, dynamic> json) {
+    final modeloUsado = (json['modelo_usado'] as String? ?? '').trim();
+    final imagenesAnalizadas = (json['imagenes_analizadas'] as int?) ?? 1;
+    final productosRaw = json['productos'];
+
+    if (productosRaw is List && productosRaw.isNotEmpty) {
+      final productos = productosRaw
+          .whereType<Map>()
+          .map(
+            (item) => ProductIdentificationResult.fromJson(
+              Map<String, dynamic>.from(item),
+              modeloUsado: modeloUsado,
+              imagenesAnalizadas: imagenesAnalizadas,
+            ),
+          )
+          .where((p) => p.hasContent)
+          .toList();
+
+      if (productos.isNotEmpty) {
+        return PhotoIdentificationResponse(
+          productos: productos,
+          modeloUsado: modeloUsado,
+          imagenesAnalizadas: imagenesAnalizadas,
+        );
+      }
+    }
+
+    final single = ProductIdentificationResult.fromJson(json);
+    return PhotoIdentificationResponse(
+      productos: single.hasContent ? [single] : const [],
+      modeloUsado: modeloUsado.isNotEmpty ? modeloUsado : single.modeloUsado,
+      imagenesAnalizadas:
+          imagenesAnalizadas > 0 ? imagenesAnalizadas : single.imagenesAnalizadas,
     );
   }
 }

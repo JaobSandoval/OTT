@@ -1,12 +1,14 @@
 import 'dart:io';
 
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
 import 'package:exel_ott/core/utils/currency_format.dart';
 import 'package:exel_ott/core/utils/external_url.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
+import 'package:exel_ott/features/product_photo_search/domain/detected_product_match.dart';
 import 'package:exel_ott/features/product_photo_search/domain/product_identification_result.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/quote_from_photo/domain/quote_match_result.dart';
@@ -60,9 +62,9 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
   String? _observaciones;
   double? _estimatedTotal;
 
-  ProductIdentificationResult? _identification;
-  List<ProductCard> _candidates = const [];
-  ProductCard? _selectedProduct;
+  PhotoIdentificationResponse? _photoResponse;
+  List<DetectedProductMatch> _detectedProducts = const [];
+  int _activeDetectionIndex = 0;
   int _searchQuantity = 1;
   bool _addingToCart = false;
   bool _addedToCart = false;
@@ -71,6 +73,15 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
   QuoteConfirmResult? _confirmResult;
 
   bool get _canAnalyzePhotos => _photos.isNotEmpty;
+
+  bool get _isLoadingStep =>
+      _step == _ScanStep.analyzing || _step == _ScanStep.confirming;
+
+  ProductCard? get _selectedProduct {
+    if (_detectedProducts.isEmpty) return null;
+    final index = _activeDetectionIndex.clamp(0, _detectedProducts.length - 1);
+    return _detectedProducts[index].selected;
+  }
 
   @override
   void initState() {
@@ -89,6 +100,7 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
   }
 
   Future<void> _processBarcode(String code) async {
+    await FirebaseMonitoringService.instance.logBarcodeScanned();
     setState(() {
       _error = null;
       _confirmResult = null;
@@ -114,26 +126,52 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
     try {
       final match = await widget.repository.searchByBarcode(code);
       if (!mounted) return;
+      final candidates = match.selected != null
+          ? [match.selected!]
+          : match.candidates;
+      final searchError = candidates.isEmpty
+          ? (match.searchError ?? 'Sin coincidencias para código escaneado')
+          : null;
+      if (searchError != null) {
+        await FirebaseMonitoringService.instance.logPhotoSearchFailed(
+          reason: searchError,
+        );
+      }
       setState(() {
         _step = _ScanStep.searchResult;
         _classification = null;
-        _identification = null;
-        _candidates = match.selected != null
-            ? [match.selected!]
-            : match.candidates;
-        _selectedProduct =
-            match.selected ?? (match.candidates.isNotEmpty ? match.candidates.first : null);
+        _photoResponse = null;
+        _detectedProducts = candidates.isEmpty
+            ? const []
+            : [
+                DetectedProductMatch(
+                  identification: ProductIdentificationResult(
+                    nombre: 'Código escaneado',
+                    marca: '',
+                    sku: code,
+                    categoria: '',
+                    descripcion: '',
+                    keywords: const [],
+                    confianza: 'alta',
+                  ),
+                  candidates: candidates,
+                  selected: match.selected ?? candidates.first,
+                ),
+              ];
+        _activeDetectionIndex = 0;
         _searchQuantity = 1;
         _addedToCart = false;
-        if (_candidates.isEmpty) {
-          _error = match.searchError ?? 'Sin coincidencias para "$code"';
-        }
+        _error = searchError;
       });
     } on Object catch (e) {
       if (!mounted) return;
+      final message = friendlyErrorMessage(e);
+      await FirebaseMonitoringService.instance.logPhotoSearchFailed(
+        reason: message,
+      );
       setState(() {
         _step = _ScanStep.capture;
-        _error = friendlyErrorMessage(e);
+        _error = message;
       });
     }
   }
@@ -218,6 +256,7 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
       return;
     }
 
+    await FirebaseMonitoringService.instance.logPhotoSearchStarted();
     setState(() {
       _step = _ScanStep.analyzing;
       _error = null;
@@ -246,25 +285,28 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
           _estimatedTotal = total;
         });
       } else {
-        setState(() => _loadingMessage = 'Identificando producto…');
+        setState(() => _loadingMessage = 'Identificando productos…');
         final search = await widget.repository.identifyAndSearch(_photos);
         if (!mounted) return;
         setState(() {
           _step = _ScanStep.searchResult;
           _classification = classification;
-          _identification = search.identification;
-          _candidates = search.candidates;
-          _selectedProduct =
-              search.candidates.isNotEmpty ? search.candidates.first : null;
+          _photoResponse = search.response;
+          _detectedProducts = search.detected;
+          _activeDetectionIndex = 0;
           _searchQuantity = 1;
           _addedToCart = false;
         });
       }
     } on Object catch (e) {
       if (!mounted) return;
+      final message = friendlyErrorMessage(e);
+      await FirebaseMonitoringService.instance.logPhotoSearchFailed(
+        reason: message,
+      );
       setState(() {
         _step = _ScanStep.capture;
-        _error = friendlyErrorMessage(e);
+        _error = message;
       });
     }
   }
@@ -403,9 +445,9 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
       _step = _ScanStep.capture;
       _photos.clear();
       _error = null;
-      _identification = null;
-      _candidates = const [];
-      _selectedProduct = null;
+      _photoResponse = null;
+      _detectedProducts = const [];
+      _activeDetectionIndex = 0;
       _matches = const [];
       _observaciones = null;
       _estimatedTotal = null;
@@ -422,10 +464,12 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                child: _buildBody(context),
-              ),
+              child: _isLoadingStep
+                  ? _buildLoading(context)
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                      child: _buildBody(context),
+                    ),
             ),
             if (_step == _ScanStep.capture ||
                 _step == _ScanStep.quoteReview ||
@@ -439,7 +483,6 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
 
   Widget _buildBody(BuildContext context) {
     return switch (_step) {
-      _ScanStep.analyzing || _ScanStep.confirming => _buildLoading(context),
       _ScanStep.searchResult => _buildSearchResult(context),
       _ScanStep.quoteReview => _buildQuoteReview(context),
       _ScanStep.quoteSuccess => _buildQuoteSuccess(context),
@@ -695,31 +738,62 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
   }
 
   Widget _buildLoading(BuildContext context) {
+    final theme = Theme.of(context);
     final message = _step == _ScanStep.confirming
         ? 'Registrando cotización y agregando al carrito…'
         : _loadingMessage;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 60),
-      child: Column(
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 20),
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 8),
-          const Text(
-            'Primero intenta con el modelo rápido.\nSi no detecta nada, escala al modelo avanzado.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-        ],
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 20),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            if (_step == _ScanStep.analyzing) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Primero intenta con el modelo rápido.\n'
+                'Si no detecta nada, escala al modelo avanzado.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
 
+  void _selectCatalogProduct(int detectionIndex, ProductCard product) {
+    setState(() {
+      _activeDetectionIndex = detectionIndex;
+      _detectedProducts = [
+        for (var i = 0; i < _detectedProducts.length; i++)
+          if (i == detectionIndex)
+            _detectedProducts[i].copyWith(selected: product)
+          else
+            _detectedProducts[i],
+      ];
+      _addedToCart = false;
+    });
+  }
+
   Widget _buildSearchResult(BuildContext context) {
     final theme = Theme.of(context);
-    final id = _identification;
+    final response = _photoResponse;
+    final multipleDetected = _detectedProducts.length > 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -736,86 +810,37 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
           ),
           const SizedBox(height: 12),
         ],
-        if (id != null) ...[
-          InkWell(
-            onTap: _selectedProduct != null
-                ? () => _openProductDetail(_selectedProduct!)
-                : null,
-            borderRadius: BorderRadius.circular(AppDecorations.radiusMd),
-            child: Wrap(
+        if (response != null) ...[
+          Wrap(
             spacing: 8,
             runSpacing: 6,
             children: [
+              if (response.modeloUsado.isNotEmpty)
+                _InfoChip(
+                  label: response.modeloUsado,
+                  icon: Icons.auto_awesome,
+                  color: response.modeloUsado.contains('mini')
+                      ? AppColors.catalogAccentAlt
+                      : AppColors.catalogAccent,
+                ),
               _InfoChip(
-                label: id.modeloUsado,
-                icon: Icons.auto_awesome,
-                color: id.modeloUsado.contains('mini')
-                    ? AppColors.catalogAccentAlt
-                    : AppColors.catalogAccent,
-              ),
-              _InfoChip(
-                label: '${id.imagenesAnalizadas} foto${id.imagenesAnalizadas > 1 ? 's' : ''}',
+                label:
+                    '${response.imagenesAnalizadas} foto${response.imagenesAnalizadas > 1 ? 's' : ''}',
                 icon: Icons.image_outlined,
                 color: AppColors.textSecondary,
               ),
               _InfoChip(
-                label: 'Confianza: ${id.confianza}',
-                icon: Icons.bar_chart,
-                color: id.confianza == 'alta'
-                    ? const Color(0xFF16A34A)
-                    : id.confianza == 'media'
-                        ? const Color(0xFFCA8A04)
-                        : AppColors.error,
+                label:
+                    '${_detectedProducts.length} producto${_detectedProducts.length == 1 ? '' : 's'} detectado${_detectedProducts.length == 1 ? '' : 's'}',
+                icon: Icons.inventory_2_outlined,
+                color: AppColors.catalogAccent,
               ),
             ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: InkWell(
-              onTap: _selectedProduct != null
-                  ? () => _openProductDetail(_selectedProduct!)
-                  : null,
-              borderRadius: BorderRadius.circular(AppDecorations.radiusMd),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            id.nombre.isNotEmpty ? id.nombre : 'Producto identificado',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (_selectedProduct != null)
-                          const Icon(Icons.open_in_new, size: 18, color: AppColors.textSecondary),
-                      ],
-                    ),
-                    if (id.marca.isNotEmpty)
-                      Text(
-                        id.marca,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    if (id.sku.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      _TagRow(label: 'SKU', value: id.sku),
-                    ],
-                  ],
-                ),
-              ),
-            ),
           ),
           const SizedBox(height: 16),
         ],
 
-        if (_candidates.isEmpty)
+        if (_detectedProducts.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -823,31 +848,171 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
               borderRadius: BorderRadius.circular(AppDecorations.radiusMd),
             ),
             child: Text(
-              _error ?? 'No se encontraron productos en el catálogo.',
+              _error ?? 'No se detectaron productos en la imagen.',
               textAlign: TextAlign.center,
             ),
           )
-        else ...[
-          Row(
-            children: [
-              const Expanded(child: AppSectionLabel(text: 'Resultados en catálogo')),
-              Text(
-                '${_candidates.length} encontrado${_candidates.length > 1 ? 's' : ''}',
-                style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ..._candidates.map((p) => _CandidateTile(
-                product: p,
-                selected: _selectedProduct?.idProducto == p.idProducto,
-                onSelect: () => setState(() => _selectedProduct = p),
-                onOpenDetail: () => _openProductDetail(p),
-              )),
-          const SizedBox(height: 80),
-        ],
+        else
+          ...List.generate(_detectedProducts.length, (index) {
+            final match = _detectedProducts[index];
+            final id = match.identification;
+            final isActive = _activeDetectionIndex == index;
 
-        if (_error != null && _candidates.isNotEmpty) ...[
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: index == _detectedProducts.length - 1 ? 80 : 16,
+              ),
+              child: Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDecorations.radiusMd),
+                  side: BorderSide(
+                    color: isActive
+                        ? AppColors.catalogAccent
+                        : AppColors.borderLight,
+                    width: isActive ? 2 : 1,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: AppColors.catalogAccent
+                                  .withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${index + 1}',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: AppColors.catalogAccent,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              multipleDetected
+                                  ? 'Producto ${index + 1}'
+                                  : 'Producto detectado',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          _InfoChip(
+                            label: 'Confianza: ${id.confianza}',
+                            icon: Icons.bar_chart,
+                            color: id.confianza == 'alta'
+                                ? const Color(0xFF16A34A)
+                                : id.confianza == 'media'
+                                    ? const Color(0xFFCA8A04)
+                                    : AppColors.error,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        id.displayName,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (id.marca.isNotEmpty)
+                        Text(
+                          id.marca,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      if (id.sku.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        _TagRow(label: 'SKU', value: id.sku),
+                      ],
+                      if (id.categoria.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        _TagRow(label: 'Categoría', value: id.categoria),
+                      ],
+                      if (id.descripcion.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          id.descripcion,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                      if (id.keywords.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: id.keywords
+                              .map(
+                                (k) => Chip(
+                                  label: Text(
+                                    k,
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppSectionLabel(
+                              text: match.candidates.isEmpty
+                                  ? 'Sin coincidencias en catálogo'
+                                  : 'Coincidencias en catálogo',
+                            ),
+                          ),
+                          if (match.candidates.isNotEmpty)
+                            Text(
+                              '${match.candidates.length}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (match.candidates.isEmpty)
+                        Text(
+                          'No se encontró este producto en el catálogo.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        )
+                      else
+                        ...match.candidates.map(
+                          (p) => _CandidateTile(
+                            product: p,
+                            selected: match.selected?.idProducto == p.idProducto,
+                            onSelect: () => _selectCatalogProduct(index, p),
+                            onOpenDetail: () => _openProductDetail(p),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+
+        if (_error != null && _detectedProducts.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(_error!, style: TextStyle(color: AppColors.error)),
         ],
