@@ -3,6 +3,7 @@ import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
 import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/features/product_photo_search/data/apixlmovil_product_photo_client.dart';
 import 'package:exel_ott/features/product_photo_search/domain/detected_product_match.dart';
+import 'package:exel_ott/features/product_photo_search/domain/product_identification_result.dart';
 import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/quote_from_photo/data/quote_image_compressor.dart';
@@ -59,7 +60,7 @@ class ProductPhotoSearchRepository {
 
     final detected = <DetectedProductMatch>[];
     for (final identification in response.productos) {
-      final candidates = await _searchCascade(identification.searchQueries);
+      final candidates = await _searchForIdentification(identification);
       detected.add(
         DetectedProductMatch(
           identification: identification,
@@ -72,18 +73,41 @@ class ProductPhotoSearchRepository {
     return PhotoSearchResult(response: response, detected: detected);
   }
 
-  /// Intenta cada query en orden y devuelve los primeros resultados encontrados.
-  Future<List<ProductCard>> _searchCascade(List<String> queries) async {
-    for (final query in queries) {
-      if (query.isEmpty) continue;
+  /// Intenta cada combinación query+filtros y devuelve los mejores resultados.
+  Future<List<ProductCard>> _searchForIdentification(
+    ProductIdentificationResult identification,
+  ) async {
+    for (final attempt in identification.catalogSearchAttempts) {
+      if (attempt.query.isEmpty && !attempt.filters.hasAny) continue;
       try {
-        final results = await _productsRepository.search(query);
-        if (results.isNotEmpty) return results;
+        final results = await _productsRepository.search(
+          attempt.query,
+          filters: attempt.filters,
+        );
+        if (results.isNotEmpty) {
+          return _rankCandidates(results, identification.marca);
+        }
       } on Object {
         continue;
       }
     }
     return const [];
+  }
+
+  /// Prioriza candidatos cuya marca coincide con la detectada por IA.
+  List<ProductCard> _rankCandidates(List<ProductCard> results, String marca) {
+    if (marca.isEmpty) return results;
+
+    final marcaLower = marca.trim().toLowerCase();
+    final matching = results
+        .where((p) => p.marca.trim().toLowerCase() == marcaLower)
+        .toList();
+    if (matching.isEmpty) return results;
+
+    final nonMatching = results
+        .where((p) => p.marca.trim().toLowerCase() != marcaLower)
+        .toList();
+    return [...matching, ...nonMatching];
   }
 
   Future<bool> agregarAlCarrito({

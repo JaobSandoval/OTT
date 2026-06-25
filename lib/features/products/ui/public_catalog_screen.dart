@@ -6,6 +6,8 @@ import 'package:exel_ott/features/products/data/products_repository.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/products/domain/product_search_filters.dart';
 import 'package:exel_ott/features/products/domain/product_search_launch.dart';
+import 'package:exel_ott/features/products/ui/widgets/new_products_carousel.dart';
+import 'package:exel_ott/features/welcome/ui/welcome_layout_metrics.dart';
 import 'package:exel_ott/features/products/ui/widgets/product_card_tile.dart';
 import 'package:exel_ott/features/products/ui/widgets/products_filters_bar.dart';
 import 'package:flutter/material.dart';
@@ -35,9 +37,12 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
   bool _loading = false;
   String? _error;
 
+  late final Future<List<ProductCard>> _newProductsFuture;
+
   @override
   void initState() {
     super.initState();
+    _newProductsFuture = widget.productsRepository.fetchNewProducts();
     final launch = widget.initialLaunch;
     if (launch != null && launch.shouldSearch) {
       final q = launch.query?.trim();
@@ -244,36 +249,65 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
     }
 
     if (!hasSearch && _activeQuery.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.inventory_2_outlined,
-                size: 56,
-                color: AppColors.textSecondary.withValues(alpha: 0.6),
+      final metrics = WelcomeLayoutMetrics(MediaQuery.sizeOf(context).width);
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(0, 16, 0, 24),
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              metrics.horizontalPadding,
+              0,
+              metrics.horizontalPadding,
+              6,
+            ),
+            child: Text(
+              'Productos nuevos',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Busca por nombre, marca o código',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Mismo catálogo que XL-Store antes de iniciar sesión.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+            ),
           ),
-        ),
+          NewProductsCarousel(
+            productsFuture: _newProductsFuture,
+            itemWidth: metrics.newProductItemWidth,
+            height: metrics.newProductsRowHeight,
+            catalogOnly: true,
+            horizontalPadding: metrics.horizontalPadding,
+            spacing: metrics.gridSpacing,
+            radius: metrics.bannerRadius,
+          ),
+          const SizedBox(height: 32),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.inventory_2_outlined,
+                  size: 56,
+                  color: AppColors.textSecondary.withValues(alpha: 0.6),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Busca por nombre, marca o código',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Mismo catálogo que XL-Store antes de iniciar sesión.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ],
       );
     }
 

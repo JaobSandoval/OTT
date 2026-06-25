@@ -152,6 +152,28 @@ ${ApiXlMovilSoapClient.param('Password', password)}''';
     return list;
   }
 
+  Future<List<ProductCard>> listadoProductosNuevosPublico() async {
+    TechnicalLogStore.instance.info(
+      'PRODUCTS',
+      'ListadoProductosNuevosPublico SOAP — solicitud',
+    );
+
+    final xml = await _soap.invoke(
+      methodName: 'ListadoProductosNuevosPublico',
+      idUsuario: _guestUserId,
+      password: _guestPassword,
+      bodyXml: '',
+    );
+
+    final list = ApiXlMovilProductosNuevosParser.parsePublic(xml);
+    TechnicalLogStore.instance.info(
+      'PRODUCTS',
+      'ListadoProductosNuevosPublico SOAP — respuesta',
+      fields: {'total': '${list.length}'},
+    );
+    return list;
+  }
+
   Future<String?> productoPrecio({
     required int idUsuario,
     required String password,

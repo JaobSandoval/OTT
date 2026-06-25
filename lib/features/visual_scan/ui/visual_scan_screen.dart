@@ -10,6 +10,7 @@ import 'package:exel_ott/core/utils/external_url.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
 import 'package:exel_ott/features/product_photo_search/domain/detected_product_match.dart';
 import 'package:exel_ott/features/product_photo_search/domain/product_identification_result.dart';
+import 'package:exel_ott/features/product_photo_search/ui/detected_products_pager.dart';
 import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/quote_from_photo/domain/quote_match_result.dart';
 import 'package:exel_ott/features/quote_from_photo/ui/barcode_scanner_sheet.dart';
@@ -776,6 +777,14 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
     );
   }
 
+  void _onActiveDetectionChanged(int index) {
+    setState(() {
+      _activeDetectionIndex = index;
+      _searchQuantity = 1;
+      _addedToCart = false;
+    });
+  }
+
   void _selectCatalogProduct(int detectionIndex, ProductCard product) {
     setState(() {
       _activeDetectionIndex = detectionIndex;
@@ -791,9 +800,7 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
   }
 
   Widget _buildSearchResult(BuildContext context) {
-    final theme = Theme.of(context);
     final response = _photoResponse;
-    final multipleDetected = _detectedProducts.length > 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -811,206 +818,23 @@ class _VisualScanScreenState extends State<VisualScanScreen> {
           const SizedBox(height: 12),
         ],
         if (response != null) ...[
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              if (response.modeloUsado.isNotEmpty)
-                _InfoChip(
-                  label: response.modeloUsado,
-                  icon: Icons.auto_awesome,
-                  color: response.modeloUsado.contains('mini')
-                      ? AppColors.catalogAccentAlt
-                      : AppColors.catalogAccent,
-                ),
-              _InfoChip(
-                label:
-                    '${response.imagenesAnalizadas} foto${response.imagenesAnalizadas > 1 ? 's' : ''}',
-                icon: Icons.image_outlined,
-                color: AppColors.textSecondary,
-              ),
-              _InfoChip(
-                label:
-                    '${_detectedProducts.length} producto${_detectedProducts.length == 1 ? '' : 's'} detectado${_detectedProducts.length == 1 ? '' : 's'}',
-                icon: Icons.inventory_2_outlined,
-                color: AppColors.catalogAccent,
-              ),
-            ],
+          PhotoIdentificationInfoChips(
+            response: response,
+            detectedCount: _detectedProducts.length,
           ),
           const SizedBox(height: 16),
         ],
 
-        if (_detectedProducts.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(AppDecorations.radiusMd),
-            ),
-            child: Text(
-              _error ?? 'No se detectaron productos en la imagen.',
-              textAlign: TextAlign.center,
-            ),
-          )
-        else
-          ...List.generate(_detectedProducts.length, (index) {
-            final match = _detectedProducts[index];
-            final id = match.identification;
-            final isActive = _activeDetectionIndex == index;
-
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: index == _detectedProducts.length - 1 ? 80 : 16,
-              ),
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppDecorations.radiusMd),
-                  side: BorderSide(
-                    color: isActive
-                        ? AppColors.catalogAccent
-                        : AppColors.borderLight,
-                    width: isActive ? 2 : 1,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: AppColors.catalogAccent
-                                  .withValues(alpha: 0.12),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              '${index + 1}',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: AppColors.catalogAccent,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              multipleDetected
-                                  ? 'Producto ${index + 1}'
-                                  : 'Producto detectado',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          _InfoChip(
-                            label: 'Confianza: ${id.confianza}',
-                            icon: Icons.bar_chart,
-                            color: id.confianza == 'alta'
-                                ? const Color(0xFF16A34A)
-                                : id.confianza == 'media'
-                                    ? const Color(0xFFCA8A04)
-                                    : AppColors.error,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        id.displayName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (id.marca.isNotEmpty)
-                        Text(
-                          id.marca,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      if (id.sku.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        _TagRow(label: 'SKU', value: id.sku),
-                      ],
-                      if (id.categoria.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        _TagRow(label: 'Categoría', value: id.categoria),
-                      ],
-                      if (id.descripcion.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          id.descripcion,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                      if (id.keywords.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: id.keywords
-                              .map(
-                                (k) => Chip(
-                                  label: Text(
-                                    k,
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ],
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: AppSectionLabel(
-                              text: match.candidates.isEmpty
-                                  ? 'Sin coincidencias en catálogo'
-                                  : 'Coincidencias en catálogo',
-                            ),
-                          ),
-                          if (match.candidates.isNotEmpty)
-                            Text(
-                              '${match.candidates.length}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (match.candidates.isEmpty)
-                        Text(
-                          'No se encontró este producto en el catálogo.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        )
-                      else
-                        ...match.candidates.map(
-                          (p) => _CandidateTile(
-                            product: p,
-                            selected: match.selected?.idProducto == p.idProducto,
-                            onSelect: () => _selectCatalogProduct(index, p),
-                            onOpenDetail: () => _openProductDetail(p),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
+        DetectedProductsPager(
+          detectedProducts: _detectedProducts,
+          activeIndex: _activeDetectionIndex,
+          onActiveIndexChanged: _onActiveDetectionChanged,
+          onSelectCandidate: _selectCatalogProduct,
+          onOpenDetail: _openProductDetail,
+          showDetailedIdentification: true,
+          emptyMessage: _error ?? 'No se detectaron productos en la imagen.',
+          bottomPadding: _selectedProduct != null ? 80 : 0,
+        ),
 
         if (_error != null && _detectedProducts.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -1253,80 +1077,6 @@ class _InfoChip extends StatelessWidget {
           const SizedBox(width: 4),
           Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
         ],
-      ),
-    );
-  }
-}
-
-class _TagRow extends StatelessWidget {
-  const _TagRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text('$label: ', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-      ],
-    );
-  }
-}
-
-class _CandidateTile extends StatelessWidget {
-  const _CandidateTile({
-    required this.product,
-    required this.selected,
-    required this.onSelect,
-    required this.onOpenDetail,
-  });
-
-  final ProductCard product;
-  final bool selected;
-  final VoidCallback onSelect;
-  final VoidCallback onOpenDetail;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDecorations.radiusMd),
-        side: selected
-            ? const BorderSide(color: AppColors.catalogAccent, width: 2)
-            : BorderSide.none,
-      ),
-      child: ListTile(
-        onTap: onOpenDetail,
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            product.imageUrl,
-            width: 48,
-            height: 48,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                const Icon(Icons.inventory_2, size: 36),
-          ),
-        ),
-        title: Text(product.descripcion, maxLines: 2, overflow: TextOverflow.ellipsis),
-        subtitle: Text('${product.idProducto} · ${product.marca}'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: selected ? 'Seleccionado' : 'Seleccionar',
-              onPressed: onSelect,
-              icon: Icon(
-                selected ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: selected ? AppColors.catalogAccent : AppColors.borderLight,
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
-        ),
       ),
     );
   }

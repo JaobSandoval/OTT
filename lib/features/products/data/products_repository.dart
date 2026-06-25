@@ -167,6 +167,26 @@ class ProductsRepository {
     );
   }
 
+  Future<List<ProductCard>> fetchProductosNuevosPublic() async {
+    await AppRuntimeEndpoints.instance.refreshRemoteConfig();
+    return _api.listadoProductosNuevosPublico();
+  }
+
+  /// Productos nuevos para inicio o catálogo público (con o sin sesión).
+  Future<List<ProductCard>> fetchNewProducts() async {
+    final token = await _sessionStore.readToken();
+    final signedIn = token != null && token.trim().isNotEmpty;
+
+    try {
+      if (signedIn) {
+        return await fetchProductosNuevos();
+      }
+      return await fetchProductosNuevosPublic();
+    } on Object {
+      return const [];
+    }
+  }
+
   Future<String> userSucursalLabel() async {
     final sucursal = await _sessionStore.readExelSucursal();
     final name = sucursal?.sucursalNombre.trim() ?? '';

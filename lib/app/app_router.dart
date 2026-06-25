@@ -64,14 +64,16 @@ class AppRouter {
           if (isWelcome || isLoggingIn || isWeb || isCatalog) return null;
           return '/welcome';
         }
-        if (signedIn && isLoggingIn) return '/home/products';
+        if (signedIn && (isLoggingIn || isWelcome)) return '/home';
         return null;
       },
       routes: [
         GoRoute(
           path: '/welcome',
-          builder: (context, state) =>
-              WelcomeScreen(auth: _authController),
+          builder: (context, state) => WelcomeScreen(
+            auth: _authController,
+            productsRepository: _productsRepository,
+          ),
         ),
         GoRoute(
           path: '/login',
@@ -158,7 +160,11 @@ class AppRouter {
           routes: [
             GoRoute(
               path: '/home',
-              builder: (context, state) => HomeScreen(),
+              builder: (context, state) => WelcomeScreen(
+                auth: _authController,
+                embeddedInShell: true,
+                productsRepository: _productsRepository,
+              ),
               routes: [
                 GoRoute(
                   path: 'otp',

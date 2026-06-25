@@ -1,3 +1,11 @@
+import 'package:exel_ott/features/products/domain/product_search_filters.dart';
+
+/// Un intento de búsqueda en catálogo con query y filtros opcionales.
+typedef CatalogSearchAttempt = ({
+  String query,
+  ProductSearchFilters filters,
+});
+
 class ProductIdentificationResult {
   const ProductIdentificationResult({
     required this.nombre,
@@ -7,6 +15,7 @@ class ProductIdentificationResult {
     required this.descripcion,
     required this.keywords,
     required this.confianza,
+    this.busquedaSugerida = '',
     this.modeloUsado = '',
     this.imagenesAnalizadas = 1,
   });
@@ -17,6 +26,7 @@ class ProductIdentificationResult {
   final String categoria;
   final String descripcion;
   final List<String> keywords;
+  final String busquedaSugerida;
 
   /// 'alta' | 'media' | 'baja'
   final String confianza;
@@ -27,26 +37,96 @@ class ProductIdentificationResult {
       nombre.isNotEmpty ||
       marca.isNotEmpty ||
       sku.isNotEmpty ||
+      busquedaSugerida.isNotEmpty ||
       keywords.isNotEmpty;
 
   String get displayName =>
       nombre.isNotEmpty ? nombre : (sku.isNotEmpty ? sku : 'Producto detectado');
 
   /// La query más relevante para buscar en el catálogo.
-  /// Prioridad: SKU → nombre → primer keyword.
   String get bestSearchQuery {
-    if (sku.isNotEmpty) return sku;
-    if (nombre.isNotEmpty) return nombre;
-    return keywords.isNotEmpty ? keywords.first : '';
+    final queries = searchQueries;
+    return queries.isNotEmpty ? queries.first : '';
   }
 
-  /// Todas las queries posibles para búsqueda en cascada.
+  /// Queries de texto ordenadas por relevancia (sin filtros).
   List<String> get searchQueries {
-    final queries = <String>{};
-    if (sku.isNotEmpty) queries.add(sku);
-    if (nombre.isNotEmpty) queries.add(nombre);
-    queries.addAll(keywords);
-    return queries.toList();
+    final seen = <String>{};
+    final ordered = <String>[];
+
+    void add(String value) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return;
+      final key = trimmed.toLowerCase();
+      if (seen.add(key)) ordered.add(trimmed);
+    }
+
+    if (busquedaSugerida.isNotEmpty) add(busquedaSugerida);
+    if (sku.isNotEmpty) add(sku);
+
+    final marcaLower = marca.toLowerCase();
+    final nombreLower = nombre.toLowerCase();
+    final marcaInNombre =
+        marca.isNotEmpty && nombreLower.contains(marcaLower);
+
+    if (marca.isNotEmpty && nombre.isNotEmpty && !marcaInNombre) {
+      add('$marca $nombre');
+      add('$nombre $marca');
+    }
+
+    if (nombre.isNotEmpty) add(nombre);
+    if (marca.isNotEmpty && !marcaInNombre) add(marca);
+
+    for (final keyword in keywords) {
+      add(keyword);
+    }
+
+    return ordered;
+  }
+
+  /// Intentos de búsqueda en catálogo: query + filtros (p. ej. id_marca).
+  List<CatalogSearchAttempt> get catalogSearchAttempts {
+    final seen = <String>{};
+    final attempts = <CatalogSearchAttempt>[];
+
+    void addAttempt(String query, ProductSearchFilters filters) {
+      final trimmed = query.trim();
+      if (trimmed.isEmpty && !filters.hasAny) return;
+      final key =
+          '${trimmed.toLowerCase()}|${filters.idMarca.toLowerCase()}|'
+          '${filters.idCategoria.toLowerCase()}|${filters.idSubcategoria.toLowerCase()}';
+      if (!seen.add(key)) return;
+      attempts.add((query: trimmed, filters: filters));
+    }
+
+    if (sku.isNotEmpty) {
+      addAttempt(sku, const ProductSearchFilters());
+      if (marca.isNotEmpty) {
+        addAttempt(sku, ProductSearchFilters(idMarca: marca));
+      }
+    }
+
+    if (busquedaSugerida.isNotEmpty) {
+      addAttempt(busquedaSugerida, const ProductSearchFilters());
+      if (marca.isNotEmpty) {
+        addAttempt(busquedaSugerida, ProductSearchFilters(idMarca: marca));
+      }
+    }
+
+    final marcaLower = marca.toLowerCase();
+    final nombreLower = nombre.toLowerCase();
+    final marcaInNombre =
+        marca.isNotEmpty && nombreLower.contains(marcaLower);
+
+    if (nombre.isNotEmpty && marca.isNotEmpty && !marcaInNombre) {
+      addAttempt(nombre, ProductSearchFilters(idMarca: marca));
+    }
+
+    for (final query in searchQueries) {
+      addAttempt(query, const ProductSearchFilters());
+    }
+
+    return attempts;
   }
 
   static ProductIdentificationResult fromJson(
@@ -60,6 +140,7 @@ class ProductIdentificationResult {
       sku: (json['sku'] as String? ?? '').trim(),
       categoria: (json['categoria'] as String? ?? '').trim(),
       descripcion: (json['descripcion'] as String? ?? '').trim(),
+      busquedaSugerida: (json['busqueda_sugerida'] as String? ?? '').trim(),
       keywords: (json['keywords'] as List<dynamic>? ?? [])
           .map((e) => e.toString().trim())
           .where((s) => s.isNotEmpty)

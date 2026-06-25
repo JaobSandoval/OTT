@@ -79,7 +79,7 @@ class _WelcomePromoCarouselState extends State<WelcomePromoCarousel> {
             },
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(widget.banners.length, (index) {

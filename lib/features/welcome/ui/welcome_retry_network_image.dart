@@ -143,6 +143,8 @@ class _WelcomeRetryNetworkImageState extends State<WelcomeRetryNetworkImage> {
     return Image.network(
       key: ValueKey('$_requestUrl#$_attempt'),
       _requestUrl,
+      width: double.infinity,
+      height: double.infinity,
       fit: widget.fit,
       alignment: widget.alignment,
       loadingBuilder: (context, child, progress) {

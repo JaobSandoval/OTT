@@ -92,7 +92,7 @@ class AppDrawer extends StatelessWidget {
                         ],
                         const SizedBox(height: 8),
                         Text(
-                          'v1.0.17',
+                          'v1.0.19',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: Colors.white.withValues(alpha: 0.7),
                           ),

@@ -2,12 +2,15 @@ import 'package:exel_ott/core/auth/auth_controller.dart';
 import 'package:exel_ott/core/config/app_config.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
+import 'package:exel_ott/features/products/data/products_repository.dart';
+import 'package:exel_ott/features/products/domain/product_card.dart';
 import 'package:exel_ott/features/welcome/data/welcome_banners_repository.dart';
 import 'package:exel_ott/features/welcome/domain/welcome_content.dart';
 import 'package:exel_ott/features/welcome/domain/welcome_marca.dart';
 import 'package:exel_ott/features/welcome/ui/welcome_banner_navigation.dart';
 import 'package:exel_ott/features/welcome/ui/welcome_layout_metrics.dart';
 import 'package:exel_ott/features/welcome/ui/welcome_retry_network_image.dart';
+import 'package:exel_ott/features/products/ui/widgets/new_products_carousel.dart';
 import 'package:exel_ott/features/welcome/ui/welcome_promo_carousel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,10 +20,15 @@ class WelcomeScreen extends StatefulWidget {
   WelcomeScreen({
     super.key,
     required this.auth,
+    this.embeddedInShell = false,
+    ProductsRepository? productsRepository,
     WelcomeBannersRepository? bannersRepository,
-  })  : _bannersRepository = bannersRepository ?? WelcomeBannersRepository();
+  })  : _productsRepository = productsRepository,
+        _bannersRepository = bannersRepository ?? WelcomeBannersRepository();
 
   final AuthController auth;
+  final bool embeddedInShell;
+  final ProductsRepository? _productsRepository;
   final WelcomeBannersRepository _bannersRepository;
 
   @override
@@ -29,11 +37,16 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
   late Future<WelcomeContent> _contentFuture;
+  Future<List<ProductCard>>? _newProductsFuture;
 
   @override
   void initState() {
     super.initState();
     _contentFuture = widget._bannersRepository.loadPreLoginContent();
+    final repo = widget._productsRepository;
+    if (repo != null) {
+      _newProductsFuture = repo.fetchNewProducts();
+    }
   }
 
   void _onBannerTap(String? linkUrl) {
@@ -42,9 +55,69 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final embedded = widget.embeddedInShell;
+
+    final body = FutureBuilder<WelcomeContent>(
+      future: _contentFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError || !(snapshot.data?.hasContent ?? false)) {
+          return _EmptyWelcomeState(
+            topInset: topInset,
+            embeddedInShell: embedded,
+            message: snapshot.hasError
+                ? embedded
+                    ? 'No pudimos cargar el contenido.\nUsa el menú para explorar XLStore.'
+                    : 'No pudimos cargar el contenido.\nPuedes continuar con el catálogo o iniciar sesión.'
+                : 'Bienvenido a ${AppConfig.appName}',
+          );
+        }
+
+        final content = snapshot.data!;
+        return _WelcomeBodyContent(
+          topInset: topInset,
+          bottomReserve: embedded ? bottomInset + 88.0 : 0,
+          content: content,
+          embeddedInShell: embedded,
+          compact: true,
+          newProductsFuture: _newProductsFuture,
+          onBannerTap: _onBannerTap,
+        );
+      },
+    );
+
+    if (embedded) {
+      return body;
+    }
+
+    return ListenableBuilder(
+      listenable: widget.auth,
+      builder: (context, _) {
+        if (!widget.auth.initialized || widget.auth.isSignedIn) {
+          return const Scaffold(
+            backgroundColor: AppColors.surface,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        return _buildPublicWelcomeScaffold(
+          body: body,
+          bottomInset: bottomInset,
+        );
+      },
+    );
+  }
+
+  Widget _buildPublicWelcomeScaffold({
+    required Widget body,
+    required double bottomInset,
+  }) {
+    final theme = Theme.of(context);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -58,34 +131,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: FutureBuilder<WelcomeContent>(
-                future: _contentFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (snapshot.hasError || !(snapshot.data?.hasContent ?? false)) {
-                    return _EmptyWelcomeState(
-                      topInset: topInset,
-                      message: snapshot.hasError
-                          ? 'No pudimos cargar el contenido.\nPuedes continuar con el catálogo o iniciar sesión.'
-                          : 'Bienvenido a ${AppConfig.appName}',
-                    );
-                  }
-
-                  final content = snapshot.data!;
-                  return _WelcomeScrollContent(
-                    topInset: topInset,
-                    content: content,
-                    onBannerTap: _onBannerTap,
-                  );
-                },
-              ),
-            ),
+            Expanded(child: body),
             Container(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, bottomInset + 16),
+              padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 12),
               decoration: BoxDecoration(
                 color: AppColors.surfaceElevated,
                 boxShadow: [
@@ -96,47 +144,38 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ),
                 ],
               ),
-              child: ListenableBuilder(
-                listenable: widget.auth,
-                builder: (context, _) {
-                  final signedIn = widget.auth.isSignedIn;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        signedIn
-                            ? 'Continúa en XLStore con tu cuenta'
-                            : 'Explora contenidos y accede a XLStore',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 14),
-                      FilledButton.icon(
-                        onPressed: () => context.go(
-                          signedIn ? '/home/products' : '/login',
-                        ),
-                        icon: Icon(
-                          signedIn
-                              ? Icons.storefront_rounded
-                              : Icons.login_rounded,
-                        ),
-                        label: Text(
-                          signedIn ? 'Entrar a XLStore' : 'Iniciar sesión',
-                        ),
-                      ),
-                      if (!signedIn) ...[
-                        const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: () => context.go('/catalog'),
-                          icon: const Icon(Icons.search_rounded),
-                          label: const Text('Explorar catálogo sin cuenta'),
-                        ),
-                      ],
-                    ],
-                  );
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Explora contenidos y accede a XLStore',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: () => context.go('/login'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: const Icon(Icons.login_rounded, size: 20),
+                    label: const Text('Iniciar sesión'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => context.go('/catalog'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: const Icon(Icons.search_rounded, size: 20),
+                    label: const Text('Explorar catálogo sin cuenta'),
+                  ),
+                ],
               ),
             ),
           ],
@@ -146,108 +185,222 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 }
 
-class _WelcomeScrollContent extends StatelessWidget {
-  const _WelcomeScrollContent({
+class _WelcomeBodyContent extends StatelessWidget {
+  const _WelcomeBodyContent({
     required this.topInset,
+    required this.bottomReserve,
     required this.content,
+    required this.embeddedInShell,
+    required this.compact,
+    required this.newProductsFuture,
     required this.onBannerTap,
   });
 
   final double topInset;
+  final double bottomReserve;
   final WelcomeContent content;
+  final bool embeddedInShell;
+  final bool compact;
+  final Future<List<ProductCard>>? newProductsFuture;
   final void Function(String? linkUrl) onBannerTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final metrics = WelcomeLayoutMetrics(MediaQuery.sizeOf(context).width);
-    final promocionales = content.orderedSquares;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final promocionales = content.orderedSquares;
+        final hasMarcas = content.marcas.isNotEmpty;
+        final hasProducts = newProductsFuture != null;
+        final metrics = WelcomeLayoutMetrics(
+          constraints.maxWidth,
+          viewportHeight: constraints.maxHeight,
+          topInset: topInset,
+          bottomReserve: bottomReserve,
+          hasBanners: promocionales.isNotEmpty,
+          hasMarcas: hasMarcas,
+          hasProducts: hasProducts,
+          compact: compact,
+        );
+        final theme = Theme.of(context);
 
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              metrics.horizontalPadding,
-              topInset + 12,
-              metrics.horizontalPadding,
-              8,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _WelcomeHeader(
+              topInset: topInset,
+              metrics: metrics,
+              embeddedInShell: embeddedInShell,
             ),
-            child: Row(
-              children: [
-                Image.asset(
-                  'assets/x.png',
-                  height: 32,
-                  color: AppColors.brandRed,
-                  colorBlendMode: BlendMode.srcIn,
+            if (promocionales.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(top: metrics.sectionTopGap - 4),
+                child: WelcomePromoCarousel(
+                  banners: promocionales,
+                  metrics: metrics,
+                  onBannerTap: (banner) => onBannerTap(banner.linkUrl),
                 ),
-                const SizedBox(width: 10),
-                Text(
-                  AppConfig.appName,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (promocionales.isNotEmpty)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: WelcomePromoCarousel(
-                banners: promocionales,
+              ),
+            if (hasMarcas) ...[
+              _SectionTitle(
+                label: 'Marcas',
                 metrics: metrics,
-                onBannerTap: (banner) => onBannerTap(banner.linkUrl),
+                theme: theme,
               ),
-            ),
-          ),
-        if (content.marcas.isNotEmpty) ...[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                metrics.horizontalPadding,
-                16,
-                metrics.horizontalPadding,
-                6,
+              _MarcasRow(content: content, metrics: metrics),
+            ],
+            if (hasProducts) ...[
+              _SectionTitle(
+                label: 'Productos nuevos',
+                metrics: metrics,
+                theme: theme,
               ),
-              child: Text(
-                'Marcas',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
+              NewProductsCarousel(
+                productsFuture: newProductsFuture!,
+                itemWidth: metrics.newProductItemWidth,
+                height: metrics.newProductsRowHeight,
+                embeddedInShell: embeddedInShell,
+                horizontalPadding: metrics.horizontalPadding,
+                spacing: metrics.gridSpacing,
+                radius: metrics.bannerRadius,
+              ),
+              const Spacer(),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({
+    required this.label,
+    required this.metrics,
+    required this.theme,
+  });
+
+  final String label;
+  final WelcomeLayoutMetrics metrics;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        metrics.horizontalPadding,
+        metrics.sectionTopGap,
+        metrics.horizontalPadding,
+        4,
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _WelcomeHeader extends StatelessWidget {
+  const _WelcomeHeader({
+    required this.topInset,
+    required this.metrics,
+    required this.embeddedInShell,
+  });
+
+  final double topInset;
+  final WelcomeLayoutMetrics metrics;
+  final bool embeddedInShell;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        metrics.horizontalPadding,
+        topInset + metrics.headerTopGap,
+        metrics.horizontalPadding,
+        metrics.headerBottomGap,
+      ),
+      child: Row(
+        children: [
+          if (embeddedInShell)
+            Builder(
+              builder: (ctx) => IconButton(
+                onPressed: () => Scaffold.of(ctx).openDrawer(),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                icon: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceElevated,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.menu_rounded, size: 18),
                 ),
               ),
             ),
+          if (embeddedInShell) const SizedBox(width: 4),
+          Image.asset(
+            'assets/x.png',
+            height: metrics.headerLogoHeight,
+            color: AppColors.brandRed,
+            colorBlendMode: BlendMode.srcIn,
           ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: metrics.marcaRowHeight,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: EdgeInsets.symmetric(
-                  horizontal: metrics.horizontalPadding,
-                ),
-                itemCount: content.marcas.length,
-                separatorBuilder: (context, index) =>
-                    SizedBox(width: metrics.gridSpacing + 4),
-                itemBuilder: (context, index) {
-                  final marca = content.marcas[index];
-                  return _MarcaChip(
-                    marca: marca,
-                    size: metrics.marcaSize,
-                    onTap: marca.hasLink
-                        ? () => navigateWelcomeMarca(context, marca)
-                        : null,
-                  );
-                },
-              ),
+          const SizedBox(width: 8),
+          Text(
+            AppConfig.appName,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
             ),
           ),
+          if (embeddedInShell) const Spacer(),
         ],
-        const SliverToBoxAdapter(child: SizedBox(height: 16)),
-      ],
+      ),
+    );
+  }
+}
+
+class _MarcasRow extends StatelessWidget {
+  const _MarcasRow({
+    required this.content,
+    required this.metrics,
+  });
+
+  final WelcomeContent content;
+  final WelcomeLayoutMetrics metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: metrics.marcaRowHeight,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: metrics.horizontalPadding),
+        itemCount: content.marcas.length,
+        separatorBuilder: (context, index) =>
+            SizedBox(width: metrics.gridSpacing + 4),
+        itemBuilder: (context, index) {
+          final marca = content.marcas[index];
+          return _MarcaChip(
+            marca: marca,
+            size: metrics.marcaSize,
+            onTap: marca.hasLink
+                ? () => navigateWelcomeMarca(context, marca)
+                : null,
+          );
+        },
+      ),
     );
   }
 }
@@ -296,10 +449,12 @@ class _EmptyWelcomeState extends StatelessWidget {
   const _EmptyWelcomeState({
     required this.topInset,
     required this.message,
+    this.embeddedInShell = false,
   });
 
   final double topInset;
   final String message;
+  final bool embeddedInShell;
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +468,19 @@ class _EmptyWelcomeState extends StatelessWidget {
       ),
       child: Column(
         children: [
+          if (embeddedInShell)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Builder(
+                builder: (ctx) => IconButton(
+                  onPressed: () => Scaffold.of(ctx).openDrawer(),
+                  icon: const Icon(
+                    Icons.menu_rounded,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
           Image.asset(
             'assets/x.png',
             height: 72,

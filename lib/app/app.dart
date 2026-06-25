@@ -139,6 +139,9 @@ class _ExelOttAppState extends State<ExelOttApp> {
     await _authController.loadFromStorage();
     if (_authController.isSignedIn) {
       await _imageScanPermissionService.refresh();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _appRouter.router.go('/home');
+      });
     }
     if (await _notifications.launchedFromOpenOtpTap()) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

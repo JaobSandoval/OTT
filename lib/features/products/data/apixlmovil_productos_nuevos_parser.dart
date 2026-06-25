@@ -10,4 +10,10 @@ class ApiXlMovilProductosNuevosParser {
         xml,
         'ListadoProductosNuevosResult',
       );
+
+  static List<ProductCard> parsePublic(String xml) =>
+      ApiXlMovilBuscadorResponseParser.parseWithResultTag(
+        xml,
+        'ListadoProductosNuevosPublicoResult',
+      );
 }
