@@ -79,5 +79,8 @@ class AppConfig {
       'https://www.exel.com.mx/xlstore/Recuperar';
   static const String defaultUrlAltaDeCliente =
       'https://www.exel.com.mx/AltaSocio/Solicitud.aspx';
+
+  /// Base del logTool corporativo (monitoreo de actividad). Prevalece la config remota.
+  static const String defaultUrlLogTool = 'https://www.exel.com.mx/logtool/';
 }
 

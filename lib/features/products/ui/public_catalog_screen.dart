@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:exel_ott/core/logtool/lt_log_service.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
@@ -95,6 +98,11 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
         _products = list;
         _loading = false;
       });
+      unawaited(LtLogService.instance.logAccion(
+        pantalla: '/catalog',
+        tipoOperacion: 'Busqueda',
+        comentarios: 'Query: "$apiQuery", Resultados: ${list.length}',
+      ));
     } on Object catch (e) {
       if (!mounted) return;
       setState(() {

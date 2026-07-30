@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:clarity_flutter/clarity_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -39,5 +40,16 @@ Future<void> main() async {
   }
 
   await AppRuntimeEndpoints.instance.load();
-  runApp(const ExelOttApp());
+
+  final clarityConfig = ClarityConfig(
+    projectId: 'xmyqw2w2nj',
+    logLevel: LogLevel.None,
+  );
+
+  runApp(
+    ClarityWidget(
+      app: const ExelOttApp(),
+      clarityConfig: clarityConfig,
+    ),
+  );
 }

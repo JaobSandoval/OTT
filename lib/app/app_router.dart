@@ -1,5 +1,6 @@
 import 'package:exel_ott/core/auth/auth_controller.dart';
 import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
+import 'package:exel_ott/core/logtool/lt_log_service.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:exel_ott/core/permissions/image_scan_permission_service.dart';
 import 'package:exel_ott/core/notifications/local_notifications_service.dart';
@@ -55,6 +56,7 @@ class AppRouter {
       refreshListenable: _authController,
       redirect: (context, state) {
         final path = state.uri.path;
+        LtLogService.instance.trackScreen(path);
         final isWelcome = path == '/welcome';
         final isLoggingIn = path == '/login';
         final isWeb = path == '/web';

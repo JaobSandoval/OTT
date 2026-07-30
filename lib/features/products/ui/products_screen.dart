@@ -1,6 +1,9 @@
 import 'package:exel_ott/features/cart/data/cart_repository.dart';
 import 'package:exel_ott/core/permissions/image_scan_permission_service.dart';
+import 'dart:async';
+
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
+import 'package:exel_ott/core/logtool/lt_log_service.dart';
 import 'package:exel_ott/core/theme/app_colors.dart';
 import 'package:exel_ott/core/theme/app_decorations.dart';
 import 'package:exel_ott/core/theme/app_widgets.dart';
@@ -149,6 +152,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
         _products = filtered;
         _loading = false;
       });
+      unawaited(LtLogService.instance.logAccion(
+        pantalla: '/home/products',
+        tipoOperacion: 'Busqueda',
+        comentarios: 'Query: "$apiQuery", Resultados: ${results.length}',
+      ));
     } on Object catch (e) {
       if (!mounted) return;
       setState(() {

@@ -40,6 +40,7 @@ class AppRuntimeEndpoints {
   String? _urlAppStore;
   String? _urlHazOlvidadoTuContrasena;
   String? _urlAltaDeCliente;
+  String _urlLogTool = AppConfig.defaultUrlLogTool;
   bool _enMantenimiento = false;
   String? _mensajeEnMantenimiento;
 
@@ -60,6 +61,10 @@ class AppRuntimeEndpoints {
       _urlHazOlvidadoTuContrasena ?? AppConfig.defaultUrlHazOlvidadoTuContrasena;
   String get urlAltaDeCliente =>
       _urlAltaDeCliente ?? AppConfig.defaultUrlAltaDeCliente;
+
+  /// Base del logTool corporativo, siempre terminada en `/`.
+  String get urlLogTool =>
+      _urlLogTool.endsWith('/') ? _urlLogTool : '$_urlLogTool/';
   bool get enMantenimiento => _enMantenimiento;
   String? get mensajeEnMantenimiento => _mensajeEnMantenimiento;
 
@@ -238,6 +243,8 @@ class AppRuntimeEndpoints {
     _urlAltaDeCliente =
         _pickString(map, const ['urlAltaDeCliente', 'UrlAltaDeCliente']) ??
             _urlAltaDeCliente;
+    _urlLogTool =
+        _pickString(map, const ['urlLogTool', 'UrlLogTool']) ?? _urlLogTool;
 
     final mantenimiento = _pickBoolFlag(map, const [
       'enMantenimiento',

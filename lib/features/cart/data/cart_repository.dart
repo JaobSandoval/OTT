@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/config/app_runtime_endpoints.dart';
 import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
+import 'package:exel_ott/core/logtool/lt_log_service.dart';
 import 'package:exel_ott/features/cart/data/cart_api.dart';
 import 'package:exel_ott/features/cart/domain/cart_item.dart';
 import 'package:exel_ott/features/cart/domain/cart_operation_result.dart';
@@ -95,6 +98,12 @@ class CartRepository {
         itemId: idProducto,
         quantity: cantidad,
       );
+      unawaited(LtLogService.instance.logAccion(
+        pantalla: 'Carrito',
+        tipoOperacion: 'Agregar Producto',
+        comentarios:
+            'Producto: $idProducto, Cantidad: $cantidad, Localidad: $idLocalidad',
+      ));
     }
     return result;
   }

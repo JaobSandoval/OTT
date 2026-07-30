@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
+import 'package:exel_ott/core/logtool/lt_log_service.dart';
 import 'package:exel_ott/core/security/bff_request_token_manager.dart';
 import 'package:exel_ott/core/debug/technical_log_store.dart';
 import 'package:exel_ott/core/utils/friendly_error_message.dart';
@@ -37,6 +40,7 @@ class AuthController extends ChangeNotifier {
           userId: userKey,
         );
       }
+      await _syncLtLogSession();
     }
     _initialized = true;
     notifyListeners();
@@ -68,6 +72,12 @@ class AuthController extends ChangeNotifier {
         );
       }
       await FirebaseMonitoringService.instance.logLogin();
+      await _syncLtLogSession();
+      unawaited(LtLogService.instance.logAccion(
+        pantalla: '/login',
+        tipoOperacion: 'Login',
+        comentarios: 'Login exitoso',
+      ));
       TechnicalLogStore.instance.info(
         'AUTH',
         'Login exitoso',
@@ -80,6 +90,11 @@ class AuthController extends ChangeNotifier {
     } catch (e) {
       final message = friendlyErrorMessage(e);
       await FirebaseMonitoringService.instance.logLoginFailed(reason: message);
+      unawaited(LtLogService.instance.logAccion(
+        pantalla: '/login',
+        tipoOperacion: 'Login Fallido',
+        comentarios: message,
+      ));
       TechnicalLogStore.instance.error(
         'AUTH',
         'Login fallido (mensaje amigable al usuario)',
@@ -99,8 +114,26 @@ class AuthController extends ChangeNotifier {
     BffRequestTokenManager.instance.clear();
     await FirebaseMonitoringService.instance.logLogout();
     await FirebaseMonitoringService.instance.clearSignedInUser();
+    await LtLogService.instance.logAccion(
+      pantalla: '/login',
+      tipoOperacion: 'Logout',
+      comentarios: 'Cierre de sesión',
+    );
+    LtLogService.instance.clearSession();
     await _sessionStore.clear();
     notifyListeners();
+  }
+
+  /// Sincroniza los IDs de sesión Exel hacia [LtLogService] para que queden
+  /// incluidos en cada log de actividad posterior.
+  Future<void> _syncLtLogSession() async {
+    final ids = await _sessionStore.readExelSecurityIds();
+    if (ids == null) return;
+    LtLogService.instance.setSession(
+      idCliente: ids.idCliente,
+      idUsuario: ids.idUsuario,
+      nombreUsuario: _user?.name ?? '',
+    );
   }
 }
 
