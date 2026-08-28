@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clarity_flutter/clarity_flutter.dart';
 import 'package:exel_ott/core/auth/session_store.dart';
 import 'package:exel_ott/core/firebase/firebase_monitoring_service.dart';
 import 'package:exel_ott/core/logtool/lt_log_service.dart';
@@ -33,17 +34,39 @@ class AuthController extends ChangeNotifier {
   Future<void> loadFromStorage() async {
     _token = await _sessionStore.readToken();
     if (_token != null) {
-      _user = await _authRepository.getCurrentUser(token: _token!);
-      final userKey = _user?.email.trim();
-      if (userKey != null && userKey.isNotEmpty) {
-        await FirebaseMonitoringService.instance.setSignedInUser(
-          userId: userKey,
-        );
+      try {
+        _user = await _authRepository.getCurrentUser(token: _token!);
+        final userKey = _user?.email.trim();
+        if (userKey != null && userKey.isNotEmpty) {
+          await FirebaseMonitoringService.instance.setSignedInUser(
+            userId: userKey,
+          );
+        }
+        await _syncLtLogSession();
+      } catch (e) {
+        // El servidor rechazó el usuario/contraseña guardados (p. ej. la
+        // contraseña cambió) o la sesión ya no es válida: no sirve seguir
+        // usando datos cacheados, hay que pedir que inicie sesión de nuevo.
+        await _invalidateSession(e);
       }
-      await _syncLtLogSession();
     }
     _initialized = true;
     notifyListeners();
+  }
+
+  Future<void> _invalidateSession(Object error) async {
+    TechnicalLogStore.instance.error(
+      'AUTH',
+      'Sesión inválida al reabrir la app — se cierra sesión',
+      error: error.toString(),
+    );
+    _token = null;
+    _user = null;
+    BffRequestTokenManager.instance.clear();
+    await FirebaseMonitoringService.instance.clearSignedInUser();
+    await FirebaseMonitoringService.instance.logEvent('session_invalidated');
+    LtLogService.instance.clearSession();
+    await _sessionStore.clear();
   }
 
   Future<String?> login({
@@ -120,12 +143,14 @@ class AuthController extends ChangeNotifier {
       comentarios: 'Cierre de sesión',
     );
     LtLogService.instance.clearSession();
+    Clarity.setCustomUserId('anonimo');
     await _sessionStore.clear();
     notifyListeners();
   }
 
-  /// Sincroniza los IDs de sesión Exel hacia [LtLogService] para que queden
-  /// incluidos en cada log de actividad posterior.
+  /// Sincroniza los IDs de sesión Exel hacia [LtLogService] y Clarity para que
+  /// las grabaciones de sesión y los logs de actividad queden identificados
+  /// con el usuario real en vez del ID anónimo.
   Future<void> _syncLtLogSession() async {
     final ids = await _sessionStore.readExelSecurityIds();
     if (ids == null) return;
@@ -134,6 +159,12 @@ class AuthController extends ChangeNotifier {
       idUsuario: ids.idUsuario,
       nombreUsuario: _user?.name ?? '',
     );
+    if (ids.idUsuario.isNotEmpty) {
+      Clarity.setCustomUserId(ids.idUsuario);
+    }
+    if (ids.idCliente.isNotEmpty) {
+      Clarity.setCustomTag('idCliente', ids.idCliente);
+    }
   }
 }
 
