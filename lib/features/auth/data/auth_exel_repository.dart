@@ -176,11 +176,17 @@ class AuthExelRepository implements AuthRepository {
         sucursalNombre: sucursalNombre.isNotEmpty ? sucursalNombre : null,
       );
       return user;
-    } on Object {
+    } on NetworkUnavailableException {
+      // No se pudo contactar al servidor: la sesión sigue siendo válida en
+      // principio, solo no se pudo re-verificar ahora. Usa el perfil cacheado.
       return _userFromProfileOrStored(
         usuario: creds.usuario,
         stored: stored,
       );
     }
+    // Cualquier otro error (credenciales/cuenta rechazadas por el servidor,
+    // SOAP fault, respuesta inválida) se propaga: significa que el usuario
+    // y/o contraseña guardados ya no son válidos, y quien llama debe cerrar
+    // la sesión en vez de seguir usando el caché.
   }
 }

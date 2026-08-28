@@ -13,6 +13,17 @@ class LoginRegistrarTokenResult {
   final Map<String, dynamic> profile;
 }
 
+/// Lanzada solo cuando no se pudo *contactar* al servidor (sin respuesta).
+/// A diferencia de un rechazo de credenciales/cuenta, esto no invalida la sesión local.
+class NetworkUnavailableException implements Exception {
+  NetworkUnavailableException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// Llama `LoginRegistrarToken` vía SOAP 1.1 (este WS no expone JSON ScriptService).
 class LoginRegistrarTokenApi {
   LoginRegistrarTokenApi({Dio? dio}) : _dio = dio ?? createDebugDio();
@@ -109,7 +120,7 @@ class LoginRegistrarTokenApi {
         'LoginRegistrarToken — sin conexión',
         error: '${e.type}: ${e.message}',
       );
-      throw Exception('No se pudo conectar con el servidor de login.');
+      throw NetworkUnavailableException('No se pudo conectar con el servidor de login.');
     } on Exception catch (e) {
       TechnicalLogStore.instance.error(
         'AUTH',

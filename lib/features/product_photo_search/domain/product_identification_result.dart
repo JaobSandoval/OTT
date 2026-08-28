@@ -6,6 +6,36 @@ typedef CatalogSearchAttempt = ({
   ProductSearchFilters filters,
 });
 
+/// Candidato del catálogo que regresó el buscador inteligente de apiCotizadorNew
+/// (motor FTS5 + scoring, ya rankeado; ver `candidatos_inteligentes` en la
+/// respuesta de `IdentificarProductoPorFoto`).
+class IntelligentCandidate {
+  const IntelligentCandidate({
+    required this.idProducto,
+    required this.descripcion,
+    required this.marca,
+    required this.categoria,
+    required this.subcategoria,
+  });
+
+  final String idProducto;
+  final String descripcion;
+  final String marca;
+  final String categoria;
+  final String subcategoria;
+
+  static IntelligentCandidate fromJson(Map<String, dynamic> json) {
+    String str(Object? v) => (v?.toString() ?? '').trim();
+    return IntelligentCandidate(
+      idProducto: str(json['id_producto']),
+      descripcion: str(json['descripcion']),
+      marca: str(json['marca']),
+      categoria: str(json['categoria']),
+      subcategoria: str(json['subcategoria']),
+    );
+  }
+}
+
 class ProductIdentificationResult {
   const ProductIdentificationResult({
     required this.nombre,
@@ -18,6 +48,8 @@ class ProductIdentificationResult {
     this.busquedaSugerida = '',
     this.modeloUsado = '',
     this.imagenesAnalizadas = 1,
+    this.candidatosInteligentes = const [],
+    this.seleccionadoInteligenteId,
   });
 
   final String nombre;
@@ -32,6 +64,16 @@ class ProductIdentificationResult {
   final String confianza;
   final String modeloUsado;
   final int imagenesAnalizadas;
+
+  /// Candidatos ya rankeados por el buscador inteligente (apiCotizadorNew:
+  /// FTS5+scoring + validación de relevancia por IA). Vacío si el servicio no
+  /// respondió o no está configurado — en ese caso el caller debe caer a
+  /// [catalogSearchAttempts] como hacía antes.
+  final List<IntelligentCandidate> candidatosInteligentes;
+
+  /// id_producto que la IA de relevancia eligió como el correcto, o null si
+  /// ninguno le convenció.
+  final String? seleccionadoInteligenteId;
 
   bool get hasContent =>
       nombre.isNotEmpty ||
@@ -134,6 +176,9 @@ class ProductIdentificationResult {
     String modeloUsado = '',
     int imagenesAnalizadas = 1,
   }) {
+    final candidatosRaw = json['candidatos_inteligentes'];
+    final seleccionadoRaw = json['seleccionado_inteligente'];
+
     return ProductIdentificationResult(
       nombre: (json['nombre'] as String? ?? '').trim(),
       marca: (json['marca'] as String? ?? '').trim(),
@@ -154,6 +199,18 @@ class ProductIdentificationResult {
           imagenesAnalizadas > 0
               ? imagenesAnalizadas
               : (json['imagenes_analizadas'] as int?) ?? 1,
+      candidatosInteligentes: candidatosRaw is List
+          ? candidatosRaw
+              .whereType<Map>()
+              .map((e) => IntelligentCandidate.fromJson(Map<String, dynamic>.from(e)))
+              .where((c) => c.idProducto.isNotEmpty)
+              .toList()
+          : const [],
+      seleccionadoInteligenteId: seleccionadoRaw is Map
+          ? (seleccionadoRaw['id_producto']?.toString().trim().isNotEmpty ?? false)
+              ? seleccionadoRaw['id_producto'].toString().trim()
+              : null
+          : null,
     );
   }
 }

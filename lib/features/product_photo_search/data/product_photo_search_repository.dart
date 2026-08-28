@@ -60,7 +60,15 @@ class ProductPhotoSearchRepository {
 
     final detected = <DetectedProductMatch>[];
     for (final identification in response.productos) {
-      final candidates = await _searchForIdentification(identification);
+      var candidates = await _resolveIntelligentCandidates(identification);
+      if (candidates.isEmpty) {
+        // El buscador inteligente (apiCotizadorNew) no respondió, no está
+        // configurado o no encontró nada: cae al comportamiento anterior
+        // (búsqueda de texto directa contra XL_Sel_Buscador_IA + ranking
+        // por marca en el cliente), para que la foto siga funcionando igual
+        // que antes de esta integración.
+        candidates = await _searchForIdentification(identification);
+      }
       detected.add(
         DetectedProductMatch(
           identification: identification,
@@ -71,6 +79,63 @@ class ProductPhotoSearchRepository {
     }
 
     return PhotoSearchResult(response: response, detected: detected);
+  }
+
+  /// Resuelve contra el catálogo en vivo (precio/existencia reales) los
+  /// candidatos que ya rankeó el buscador inteligente (motor FTS5+scoring +
+  /// validación de relevancia por IA en apiCotizadorNew), preservando ese
+  /// orden y moviendo al frente el que la IA marcó como el elegido.
+  Future<List<ProductCard>> _resolveIntelligentCandidates(
+    ProductIdentificationResult identification,
+  ) async {
+    final candidatos = identification.candidatosInteligentes;
+    if (candidatos.isEmpty) return const [];
+
+    final ids = candidatos
+        .map((c) => c.idProducto)
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (ids.isEmpty) return const [];
+
+    final resolved = await Future.wait(ids.map(_lookupProductById));
+
+    final byId = <String, ProductCard>{};
+    for (final card in resolved) {
+      if (card != null) byId[card.idProducto] = card;
+    }
+    if (byId.isEmpty) return const [];
+
+    final ordered = <ProductCard>[
+      for (final id in ids)
+        if (byId[id] != null) byId[id]!,
+    ];
+
+    final seleccionadoId = identification.seleccionadoInteligenteId;
+    final seleccionado = seleccionadoId != null ? byId[seleccionadoId] : null;
+    if (seleccionado != null) {
+      ordered.remove(seleccionado);
+      ordered.insert(0, seleccionado);
+    }
+
+    return ordered;
+  }
+
+  /// Busca un producto por su id exacto en el catálogo en vivo (mismo patrón
+  /// que `ProductsRepository._lookupPublicCard`): el motor de búsqueda ya
+  /// indexa el id/código, así que buscarlo como texto y confirmar la
+  /// coincidencia exacta evita necesitar un endpoint nuevo "por ids".
+  Future<ProductCard?> _lookupProductById(String id) async {
+    try {
+      final results = await _productsRepository.search(id);
+      for (final product in results) {
+        if (product.idProducto == id) return product;
+      }
+    } on Object {
+      // El candidato no se pudo resolver contra SQL en vivo (id descontinuado,
+      // desincronizado con el catálogo CSV de apiCotizadorNew, etc.) — se
+      // omite en vez de romper el resto de los candidatos.
+    }
+    return null;
   }
 
   /// Intenta cada combinación query+filtros y devuelve los mejores resultados.
