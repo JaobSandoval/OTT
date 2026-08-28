@@ -38,7 +38,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '53460567987',
     projectId: 'appxlstore-8519d',
     storageBucket: 'appxlstore-8519d.firebasestorage.app',
-    iosBundleId: 'com.appXLStore',
+    iosBundleId: 'com.appXLStore01',
   );
 
 }
